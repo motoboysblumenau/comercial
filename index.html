@@ -181,6 +181,14 @@
       font-weight: 1000;
     }
 
+    .brand-logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      object-fit: cover;
+      background: white;
+    }
+
     .steps {
       display: grid;
       gap: 6px;
@@ -408,6 +416,13 @@
       place-items: center;
       font-weight: 1000;
       font-size: 28px;
+    }
+
+    .store-logo img {
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+      object-fit: cover;
     }
 
     .status {
@@ -768,7 +783,7 @@
 
   <section id="pendingPage" class="app-shell hidden">
     <aside class="nav">
-      <div class="brand"><div class="mark">MB</div><div>Parceiro</div></div>
+      <div class="brand"><img class="brand-logo" src="./assets/motoboys-blumenau-logo.png" alt="Motoboys Blumenau" /><div>Motoboys Blumenau</div></div>
       <div class="nav-section">Cadastro</div>
       <button class="nav-item active" type="button">Status da loja</button>
       <button class="nav-item" type="button" id="pendingLogout">Sair</button>
@@ -805,7 +820,7 @@
 
   <section id="dashboardPage" class="app-shell hidden">
     <aside class="nav">
-      <div class="brand"><div class="mark">MB</div><div>Parceiro</div></div>
+      <div class="brand"><img class="brand-logo" src="./assets/motoboys-blumenau-logo.png" alt="Motoboys Blumenau" /><div id="navStoreName">Loja</div></div>
       <div class="nav-section">Inicio</div>
       <button class="nav-item active" data-nav="resumo" type="button">Resumo</button>
       <div class="nav-section">Gerenciar loja</div>
@@ -826,7 +841,7 @@
         <section class="tab-section active" data-section="resumo">
         <div class="panel hero-panel">
           <div class="store-head">
-            <div class="store-logo" id="dashInitials">MB</div>
+            <div class="store-logo"><img src="./assets/motoboys-blumenau-logo.png" alt="Motoboys Blumenau" /></div>
             <div>
               <h2 id="dashStoreName">Sua loja</h2>
               <p id="dashStoreAddress">Endereco</p>
@@ -1093,16 +1108,26 @@
       };
     }
 
-    async function geocodeAddress(address) {
-      const params = new URLSearchParams({
-        format: 'json',
-        q: `${address}, Blumenau, Santa Catarina, Brasil`,
-        limit: '1',
-      });
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
-      const data = await response.json();
-      if (!data?.length) return null;
-      return { lat: Number(data[0].lat), lng: Number(data[0].lon), label: data[0].display_name };
+    async function geocodeAddress(address, number = '') {
+      const raw = String(address || '').trim();
+      const candidates = [
+        raw,
+        [raw, number, 'Blumenau', 'Santa Catarina', 'Brasil'].filter(Boolean).join(', '),
+        [raw.split(',')[0], number, 'Blumenau', 'Santa Catarina', 'Brasil'].filter(Boolean).join(', '),
+      ].filter(Boolean);
+
+      for (const candidate of candidates) {
+        const params = new URLSearchParams({
+          format: 'json',
+          q: candidate,
+          limit: '1',
+          countrycodes: 'br',
+        });
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
+        const data = await response.json();
+        if (data?.length) return { lat: Number(data[0].lat), lng: Number(data[0].lon), label: data[0].display_name };
+      }
+      return null;
     }
 
     async function calculateRoadRoute(origin, destination) {
@@ -1290,7 +1315,7 @@
 
     function renderDashboard(store) {
       $('dashStoreTop').textContent = store.storeName || 'Loja';
-      $('dashInitials').textContent = initials(store.storeName);
+      $('navStoreName').textContent = store.storeName || 'Loja';
       $('dashStoreName').textContent = store.storeName || 'Sua loja';
       $('dashStoreAddress').textContent = formatStoreAddress(store);
       $('dashStoreProduct').textContent = `Tipo de produto: ${storeProduct(store)}`;
@@ -1444,10 +1469,20 @@
       const button = $('calculateDelivery');
       setLoading(button, true, 'Calculando...');
       try {
-        const destinationText = [formValue('deliveryAddress'), formValue('deliveryNumber'), 'Blumenau', 'SC'].filter(Boolean).join(', ');
-        const destination = await geocodeAddress(destinationText);
+        const destination = await geocodeAddress(formValue('deliveryAddress'), formValue('deliveryNumber'));
         if (!destination) {
-          showError('Nao consegui localizar esse endereco. Confira rua e numero.');
+          const distance = calculateDistanceKm(currentStore?.location, currentStore?.location);
+          currentEstimate = {
+            ...estimateDelivery(distance || 1.8),
+            destinationLocation: null,
+            routeProvider: 'Endereco sem coordenada precisa',
+          };
+          $('estimateDistance').textContent = `${currentEstimate.distanceKm} km`;
+          $('estimateTime').textContent = `${currentEstimate.estimatedTime} min`;
+          $('estimatePrice').textContent = currency(currentEstimate.estimatedPrice);
+          $('estimateBox').classList.remove('hidden');
+          $('requestDelivery').disabled = false;
+          showError('Nao consegui localizar o ponto exato, mas liberei uma estimativa minima. Confira o endereco antes de solicitar.');
           return;
         }
         const origin = currentStore?.location;
