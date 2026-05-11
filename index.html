@@ -462,6 +462,14 @@
       margin-top: 16px;
     }
 
+    .tab-section {
+      display: none;
+    }
+
+    .tab-section.active {
+      display: block;
+    }
+
     .list {
       display: grid;
       gap: 10px;
@@ -499,6 +507,58 @@
       color: var(--muted);
       font-weight: 800;
       text-align: center;
+    }
+
+    .estimate-box {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      border: 1px solid #fed7aa;
+      border-radius: 8px;
+      background: #fff7ed;
+      padding: 12px;
+    }
+
+    .estimate-box strong {
+      display: block;
+      font-size: 18px;
+      color: #9a3412;
+    }
+
+    .estimate-box span {
+      display: block;
+      margin-top: 3px;
+      color: #9a3412;
+      font-size: 12px;
+      font-weight: 850;
+      text-transform: uppercase;
+    }
+
+    .chat-box {
+      display: grid;
+      gap: 10px;
+      max-height: 340px;
+      overflow: auto;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fafafa;
+    }
+
+    .chat-message {
+      width: fit-content;
+      max-width: 82%;
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #fff7ed;
+      color: #111827;
+      font-weight: 760;
+    }
+
+    .chat-message.admin {
+      justify-self: end;
+      background: #111827;
+      color: white;
     }
 
     .error {
@@ -747,14 +807,14 @@
     <aside class="nav">
       <div class="brand"><div class="mark">MB</div><div>Parceiro</div></div>
       <div class="nav-section">Inicio</div>
-      <button class="nav-item active" type="button">Resumo</button>
+      <button class="nav-item active" data-nav="resumo" type="button">Resumo</button>
       <div class="nav-section">Gerenciar loja</div>
-      <button class="nav-item" type="button">Pedidos</button>
-      <button class="nav-item" type="button">Performance geral</button>
-      <button class="nav-item" type="button">Faturas</button>
-      <button class="nav-item" type="button">Entregadores no mapa</button>
+      <button class="nav-item" data-nav="pedidos" type="button">Pedidos</button>
+      <button class="nav-item" data-nav="performance" type="button">Performance geral</button>
+      <button class="nav-item" data-nav="faturas" type="button">Faturas</button>
+      <button class="nav-item" data-nav="mapa" type="button">Entregadores no mapa</button>
       <div class="nav-section">Servicos</div>
-      <button class="nav-item" type="button">Ajuda</button>
+      <button class="nav-item" data-nav="suporte" type="button">Suporte</button>
       <button class="nav-item" type="button" id="dashboardLogout">Sair</button>
     </aside>
     <main>
@@ -763,6 +823,7 @@
         <span class="status aprovado">Disponivel</span>
       </div>
       <div class="dashboard">
+        <section class="tab-section active" data-section="resumo">
         <div class="panel hero-panel">
           <div class="store-head">
             <div class="store-logo" id="dashInitials">MB</div>
@@ -787,7 +848,7 @@
         <div class="content-grid">
           <div class="panel">
             <h2>Pedir motoboy avulso</h2>
-            <p>Use para acionar uma entrega saindo da sua loja.</p>
+            <p>Digite o destino, calcule o valor e confirme a solicitacao.</p>
             <form id="deliveryForm" class="form">
               <div class="row">
                 <label>Cliente / destinatario*
@@ -799,16 +860,26 @@
               </div>
               <div class="row">
                 <label>Endereco de entrega*
-                  <input id="deliveryAddress" required />
+                  <input id="deliveryAddress" list="streetSuggestions" required placeholder="Digite a rua em Blumenau" />
+                  <datalist id="streetSuggestions"></datalist>
                 </label>
                 <label>Numero*
                   <input id="deliveryNumber" required />
                 </label>
               </div>
-              <label>Complemento / observacoes
-                <textarea id="deliveryNotes"></textarea>
+              <label>Complemento do destino
+                <input id="deliveryComplement" placeholder="Apartamento, sala, referencia" />
               </label>
-              <button class="btn red" type="submit">Solicitar motoboy</button>
+              <label>Observacoes para o motoboy
+                <textarea id="deliveryNotes" placeholder="Ex: retirar no balcao, levar maquina, cuidado com pacote"></textarea>
+              </label>
+              <div class="estimate-box hidden" id="estimateBox">
+                <div><strong id="estimateDistance">--</strong><span>Distancia</span></div>
+                <div><strong id="estimateTime">--</strong><span>Tempo</span></div>
+                <div><strong id="estimatePrice">--</strong><span>Valor</span></div>
+              </div>
+              <button class="btn ghost" id="calculateDelivery" type="button">Calcular valor</button>
+              <button class="btn red" id="requestDelivery" type="submit" disabled>Solicitar motoboy</button>
             </form>
           </div>
 
@@ -818,12 +889,16 @@
             <div id="courierMap" class="map" style="height:330px"></div>
           </div>
         </div>
+        </section>
 
-        <div class="content-grid">
+        <section class="tab-section" data-section="pedidos">
           <div class="panel">
             <h2>Pedidos</h2>
             <div id="deliveryList" class="list"></div>
           </div>
+        </section>
+
+        <section class="tab-section" data-section="performance">
           <div class="panel">
             <h2>Performance geral</h2>
             <div class="dashboard-grid" style="grid-template-columns:1fr">
@@ -832,7 +907,37 @@
             </div>
             <div class="notice" style="margin-top:14px">Relatorios detalhados e faturas serao liberados nas proximas etapas.</div>
           </div>
-        </div>
+        </section>
+
+        <section class="tab-section" data-section="faturas">
+          <div class="panel">
+            <h2>Faturas</h2>
+            <p>Area em construcao. As faturas comerciais serao liberadas em uma etapa posterior.</p>
+            <div class="empty">Nenhuma fatura disponivel agora.</div>
+          </div>
+        </section>
+
+        <section class="tab-section" data-section="mapa">
+          <div class="panel">
+            <h2>Entregadores no mapa</h2>
+            <p>Acompanhe entregadores que aceitaram pedidos da sua loja quando a localizacao estiver disponivel.</p>
+            <div id="courierMapFull" class="map" style="height:520px"></div>
+          </div>
+        </section>
+
+        <section class="tab-section" data-section="suporte">
+          <div class="panel">
+            <h2>Suporte da loja</h2>
+            <p>Abra um chamado direto com a administracao. O ticket aparecera no painel admin com os dados da loja.</p>
+            <div id="supportMessages" class="chat-box"><div class="empty">Nenhuma mensagem ainda.</div></div>
+            <form id="supportForm" class="form">
+              <label>Mensagem
+                <textarea id="supportText" required placeholder="Descreva o que voce precisa"></textarea>
+              </label>
+              <button class="btn red" type="submit">Enviar suporte</button>
+            </form>
+          </div>
+        </section>
       </div>
     </main>
   </section>
@@ -879,8 +984,13 @@
     let signupMap;
     let signupMarker;
     let courierMap;
+    let courierMapFull;
     let courierLayer;
+    let courierLayerFull;
     let currentStore;
+    let currentEstimate;
+    let supportTicketId;
+    let unsubscribeSupport;
     let unsubscribeDeliveries;
 
     function showPage(pageId) {
@@ -940,6 +1050,85 @@
     function formatStoreAddress(store) {
       const address = store?.address || {};
       return [address.street, address.number, address.neighborhood, address.city, address.state].filter(Boolean).join(', ');
+    }
+
+    function currency(value) {
+      return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    function toRad(value) {
+      return value * Math.PI / 180;
+    }
+
+    function calculateDistanceKm(origin, destination) {
+      if (!origin || !destination) return 0;
+      const earthRadius = 6371;
+      const dLat = toRad(destination.lat - origin.lat);
+      const dLon = toRad(destination.lng - origin.lng);
+      const lat1 = toRad(origin.lat);
+      const lat2 = toRad(destination.lat);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return Math.max(1.8, Number((earthRadius * c * 1.25).toFixed(1)));
+    }
+
+    function estimateDelivery(distanceKm) {
+      const gasolinePrice = 6.25;
+      const fuelCost = (distanceKm / 30) * gasolinePrice;
+      const maintenanceCost = distanceKm * 0.25;
+      const operationalCost = distanceKm * 1.2;
+      const estimatedPrice = fuelCost + maintenanceCost + operationalCost;
+      return {
+        distanceKm: Number(distanceKm.toFixed(1)),
+        estimatedTime: Math.ceil(14 + distanceKm * 2.6),
+        estimatedPrice: Number(estimatedPrice.toFixed(2)),
+        pricingBreakdown: {
+          fuelCost: Number(fuelCost.toFixed(2)),
+          maintenanceCost: Number(maintenanceCost.toFixed(2)),
+          operationalCost: Number(operationalCost.toFixed(2)),
+          gasolinePrice,
+        },
+      };
+    }
+
+    async function geocodeAddress(address) {
+      const params = new URLSearchParams({
+        format: 'json',
+        q: `${address}, Blumenau, Santa Catarina, Brasil`,
+        limit: '1',
+      });
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
+      const data = await response.json();
+      if (!data?.length) return null;
+      return { lat: Number(data[0].lat), lng: Number(data[0].lon), label: data[0].display_name };
+    }
+
+    async function calculateRoadRoute(origin, destination) {
+      if (!origin || !destination) return null;
+      try {
+        const coords = `${origin.lng},${origin.lat};${destination.lng},${destination.lat}`;
+        const params = new URLSearchParams({
+          overview: 'full',
+          geometries: 'geojson',
+          steps: 'false',
+          alternatives: 'false',
+        });
+        const response = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?${params.toString()}`);
+        if (!response.ok) throw new Error('route unavailable');
+        const data = await response.json();
+        const route = data.routes?.[0];
+        if (!route) return null;
+        return {
+          distanceKm: Number((route.distance / 1000).toFixed(1)),
+          durationMinutes: Math.max(1, Math.ceil(route.duration / 60)),
+          coordinates: route.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
+          provider: 'OSRM/OpenStreetMap',
+        };
+      } catch {
+        return null;
+      }
     }
 
     function storeProduct(store) {
@@ -1035,34 +1224,47 @@
     function initCourierMap() {
       if (courierMap) {
         courierMap.invalidateSize();
+        courierMapFull?.invalidateSize?.();
         return;
       }
       const point = currentStore?.location || selectedLocation;
       courierMap = L.map('courierMap').setView([point.lat, point.lng], 13);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(courierMap);
       courierLayer = L.layerGroup().addTo(courierMap);
+      courierMapFull = L.map('courierMapFull').setView([point.lat, point.lng], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(courierMapFull);
+      courierLayerFull = L.layerGroup().addTo(courierMapFull);
     }
 
     function renderCourierMap(deliveries) {
       initCourierMap();
       courierLayer.clearLayers();
+      courierLayerFull.clearLayers();
       const points = [];
+      const addToMaps = (layerFactory) => {
+        layerFactory().addTo(courierLayer);
+        layerFactory().addTo(courierLayerFull);
+      };
       if (currentStore?.location) {
         const point = [currentStore.location.lat, currentStore.location.lng];
         points.push(point);
-        L.marker(point).bindPopup(currentStore.storeName || 'Loja').addTo(courierLayer);
+        addToMaps(() => L.marker(point).bindPopup(currentStore.storeName || 'Loja'));
       }
       deliveries.forEach((delivery) => {
         const location = delivery.motoboyLocation || delivery.assignedMotoboyLocation || delivery.lastMotoboyLocation;
         if (!location?.lat || !location?.lng) return;
         const point = [Number(location.lat), Number(location.lng)];
         points.push(point);
-        L.circleMarker(point, { radius: 8, color: '#2563eb', fillColor: '#2563eb', fillOpacity: .8 })
-          .bindPopup(`${delivery.assignedMotoboyName || 'Entregador'} - ${delivery.status || 'em rota'}`)
-          .addTo(courierLayer);
+        addToMaps(() => L.circleMarker(point, { radius: 8, color: '#2563eb', fillColor: '#2563eb', fillOpacity: .8 })
+          .bindPopup(`${delivery.assignedMotoboyName || 'Entregador'} - ${delivery.status || 'em rota'}`));
       });
-      if (points.length > 1) courierMap.fitBounds(points, { padding: [30, 30] });
-      else if (points.length) courierMap.setView(points[0], 14);
+      if (points.length > 1) {
+        courierMap.fitBounds(points, { padding: [30, 30] });
+        courierMapFull.fitBounds(points, { padding: [30, 30] });
+      } else if (points.length) {
+        courierMap.setView(points[0], 14);
+        courierMapFull.setView(points[0], 14);
+      }
     }
 
     function createProtocol() {
@@ -1094,6 +1296,19 @@
       $('dashStoreProduct').textContent = `Tipo de produto: ${storeProduct(store)}`;
       showPage('dashboardPage');
       observeStoreDeliveries(store.ownerUid);
+      observeStoreSupport(store);
+    }
+
+    function statusMessage(item) {
+      if (item.status === 'Motoboy solicitado') {
+        return item.assignedMotoboyName
+          ? `${item.assignedMotoboyName} aceitou o pedido e esta a caminho da loja.`
+          : 'Motoboy aceitou o pedido e esta a caminho da loja.';
+      }
+      if (item.status === 'Em andamento') return 'Pedido coletado. Entregador esta a caminho do cliente.';
+      if (item.status === 'Finalizado') return 'Entrega finalizada.';
+      if (item.status === 'Cancelado') return 'Entrega cancelada.';
+      return 'Aguardando um motoboy aceitar o pedido.';
     }
 
     function renderDeliveries(items) {
@@ -1114,11 +1329,44 @@
               <span class="status ${item.status || 'Novo'}">${item.status || 'Novo'}</span>
             </div>
             <p>${item.deliveryAddress || ''}${item.deliveryNumber ? ', ' + item.deliveryNumber : ''}</p>
-            <p style="color:var(--muted);font-size:13px">${item.assignedMotoboyName ? 'Entregador: ' + item.assignedMotoboyName : 'Aguardando entregador'}</p>
+            <p style="color:var(--muted);font-size:13px">${statusMessage(item)}</p>
+            <p style="color:var(--muted);font-size:13px">${currency(item.estimatedPrice || 0)} - ${item.distanceKm || '--'} km</p>
           </article>
         `).join('')
         : '<div class="empty">Nenhum pedido criado ainda.</div>';
       renderCourierMap(open);
+    }
+
+    function renderSupportMessages(items) {
+      $('supportMessages').innerHTML = items.length
+        ? items.map((message) => `
+          <div class="chat-message ${message.sender === 'admin' ? 'admin' : ''}">
+            <small>${message.sender === 'admin' ? 'Admin' : currentStore?.storeName || 'Loja'}</small>
+            <div>${message.text || ''}</div>
+          </div>
+        `).join('')
+        : '<div class="empty">Nenhuma mensagem ainda.</div>';
+    }
+
+    function observeStoreSupport(store) {
+      unsubscribeSupport?.();
+      supportTicketId = `store-${store.ownerUid}`;
+      const q = query(collection(db, 'supportTickets', supportTicketId, 'messages'));
+      unsubscribeSupport = onSnapshot(q, (snapshot) => {
+        const items = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))
+          .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+        renderSupportMessages(items);
+      }, () => renderSupportMessages([]));
+    }
+
+    function showDashboardSection(section) {
+      document.querySelectorAll('[data-section]').forEach((item) => {
+        item.classList.toggle('active', item.dataset.section === section);
+      });
+      document.querySelectorAll('[data-nav]').forEach((item) => {
+        item.classList.toggle('active', item.dataset.nav === section);
+      });
+      if (section === 'mapa') setTimeout(() => courierMapFull?.invalidateSize?.(), 80);
     }
 
     function observeStoreDeliveries(uid) {
@@ -1141,6 +1389,7 @@
     document.querySelectorAll('[data-next]').forEach((button) => button.addEventListener('click', () => showStep(signupStep + 1)));
     document.querySelectorAll('[data-prev]').forEach((button) => button.addEventListener('click', () => showStep(signupStep - 1)));
     document.querySelectorAll('[data-step-link]').forEach((button) => button.addEventListener('click', () => showStep(Number(button.dataset.stepLink))));
+    document.querySelectorAll('[data-nav]').forEach((button) => button.addEventListener('click', () => showDashboardSection(button.dataset.nav)));
     document.querySelectorAll('[data-choice="hasCnpj"]').forEach((button) => {
       button.addEventListener('click', () => {
         hasCnpj = button.dataset.value;
@@ -1151,6 +1400,35 @@
 
     $('productType').addEventListener('change', () => $('customProductWrap').classList.toggle('hidden', $('productType').value !== 'Outros'));
     $('cep').addEventListener('blur', fillAddressByCep);
+    let streetSearchTimer;
+    $('deliveryAddress').addEventListener('input', () => {
+      currentEstimate = null;
+      $('estimateBox').classList.add('hidden');
+      $('requestDelivery').disabled = true;
+      clearTimeout(streetSearchTimer);
+      streetSearchTimer = setTimeout(async () => {
+        const term = $('deliveryAddress').value.trim();
+        if (term.length < 3) return;
+        try {
+          const params = new URLSearchParams({
+            format: 'json',
+            street: term,
+            city: 'Blumenau',
+            state: 'Santa Catarina',
+            country: 'Brasil',
+            limit: '8',
+          });
+          const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
+          const data = await response.json();
+          $('streetSuggestions').innerHTML = data.map((item) => `<option value="${String(item.display_name || '').replace(/"/g, '&quot;')}"></option>`).join('');
+        } catch {}
+      }, 350);
+    });
+    $('deliveryNumber').addEventListener('input', () => {
+      currentEstimate = null;
+      $('estimateBox').classList.add('hidden');
+      $('requestDelivery').disabled = true;
+    });
     ['street', 'number', 'neighborhood', 'city', 'state'].forEach((id) => $(id).addEventListener('blur', locateAddressOnMap));
     $('editAddress').addEventListener('click', () => showStep(2));
     $('openSignup').addEventListener('click', () => {
@@ -1160,6 +1438,38 @@
     $('backToLogin').addEventListener('click', () => showPage('authPage'));
     $('pendingLogout').addEventListener('click', () => signOut(auth));
     $('dashboardLogout').addEventListener('click', () => signOut(auth));
+
+    $('calculateDelivery').addEventListener('click', async () => {
+      showError('');
+      const button = $('calculateDelivery');
+      setLoading(button, true, 'Calculando...');
+      try {
+        const destinationText = [formValue('deliveryAddress'), formValue('deliveryNumber'), 'Blumenau', 'SC'].filter(Boolean).join(', ');
+        const destination = await geocodeAddress(destinationText);
+        if (!destination) {
+          showError('Nao consegui localizar esse endereco. Confira rua e numero.');
+          return;
+        }
+        const origin = currentStore?.location;
+        const route = await calculateRoadRoute(origin, destination);
+        const distanceKm = route?.distanceKm || calculateDistanceKm(origin, destination);
+        const estimate = estimateDelivery(distanceKm);
+        currentEstimate = {
+          ...estimate,
+          destinationLocation: { lat: destination.lat, lng: destination.lng },
+          routeProvider: route?.provider || 'OpenStreetMap aproximado',
+          routeDurationMinutes: route?.durationMinutes || estimate.estimatedTime,
+        };
+        if (route?.durationMinutes) currentEstimate.estimatedTime = Math.max(8, Math.ceil(route.durationMinutes + 4));
+        $('estimateDistance').textContent = `${currentEstimate.distanceKm} km`;
+        $('estimateTime').textContent = `${currentEstimate.estimatedTime} min`;
+        $('estimatePrice').textContent = currency(currentEstimate.estimatedPrice);
+        $('estimateBox').classList.remove('hidden');
+        $('requestDelivery').disabled = false;
+      } finally {
+        setLoading(button, false);
+      }
+    });
 
     $('loginForm').addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -1236,6 +1546,10 @@
         showError('Sua loja precisa estar aprovada para solicitar motoboy.');
         return;
       }
+      if (!currentEstimate) {
+        showError('Calcule o valor da rota antes de solicitar o motoboy.');
+        return;
+      }
       const button = event.submitter;
       setLoading(button, true, 'Solicitando...');
       try {
@@ -1255,15 +1569,80 @@
           pickupLocation: currentStore.location,
           deliveryAddress: formValue('deliveryAddress'),
           deliveryNumber: formValue('deliveryNumber'),
-          deliveryComplement: formValue('deliveryNotes'),
+          deliveryComplement: formValue('deliveryComplement'),
+          deliveryLocation: currentEstimate.destinationLocation,
           notes: formValue('deliveryNotes'),
+          deliveryType: 'Empresarial',
+          packageSize: currentStore.productType || 'Objetos',
+          distanceKm: currentEstimate.distanceKm,
+          estimatedTime: currentEstimate.estimatedTime,
+          estimatedPrice: currentEstimate.estimatedPrice,
+          pricingBreakdown: currentEstimate.pricingBreakdown,
+          routeProvider: currentEstimate.routeProvider,
           status: 'Novo',
           createdAt: now,
           updatedAt: now,
         });
         $('deliveryForm').reset();
+        currentEstimate = null;
+        $('estimateBox').classList.add('hidden');
+        $('requestDelivery').disabled = true;
       } catch (error) {
         showError(error.message || 'Nao foi possivel solicitar o motoboy.');
+      } finally {
+        setLoading(button, false);
+      }
+    });
+
+    $('supportForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      showError('');
+      const text = formValue('supportText');
+      if (!text || !currentStore) return;
+      const button = event.submitter;
+      setLoading(button, true, 'Enviando...');
+      try {
+        const now = new Date().toISOString();
+        const ticket = {
+          id: supportTicketId,
+          type: 'store',
+          storeId: currentStore.ownerUid,
+          storeUid: currentStore.ownerUid,
+          storeName: currentStore.storeName,
+          storePhone: currentStore.phone,
+          storeEmail: currentStore.email,
+          motoboyName: `Loja: ${currentStore.storeName}`,
+          motoboyPhone: currentStore.phone || '',
+          motoboyUid: currentStore.ownerUid,
+          message: text,
+          status: 'aberto',
+          lastMessage: text,
+          lastMessageAt: now,
+          lastSender: 'store',
+          createdAt: now,
+          updatedAt: now,
+        };
+        const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        const ticketRef = doc(db, 'supportTickets', supportTicketId);
+        const existingTicket = await getDoc(ticketRef);
+        await setDoc(ticketRef, existingTicket.exists() ? {
+          status: 'aberto',
+          lastMessage: text,
+          lastMessageAt: now,
+          lastSender: 'store',
+          updatedAt: now,
+        } : ticket, { merge: true });
+        await setDoc(doc(db, 'supportTickets', supportTicketId, 'messages', messageId), {
+          id: messageId,
+          text,
+          sender: 'store',
+          senderName: currentStore.storeName,
+          senderUid: currentStore.ownerUid,
+          createdAt: now,
+        });
+        $('supportText').value = '';
+      } catch (error) {
+        showError(error.message || 'Nao foi possivel enviar o suporte.');
       } finally {
         setLoading(button, false);
       }
