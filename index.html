@@ -1,1 +1,841 @@
-aqui comercial
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Comercial | Motoboys Blumenau</title>
+  <link rel="preconnect" href="https://unpkg.com" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --bg: #fff7ed;
+      --panel: #ffffff;
+      --soft: #ffedd5;
+      --line: #fed7aa;
+      --text: #1c1917;
+      --muted: #78716c;
+      --brand: #f97316;
+      --brand-dark: #c2410c;
+      --green: #16a34a;
+      --red: #dc2626;
+      --blue: #2563eb;
+      --shadow: 0 18px 46px rgba(154, 52, 18, .14);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .65; }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
+    }
+
+    .side {
+      min-height: 100vh;
+      padding: 32px;
+      background: #111827;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 32px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    .brand-mark {
+      width: 42px;
+      height: 42px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: var(--brand);
+      color: #111827;
+      font-weight: 1000;
+    }
+
+    .side h1 {
+      margin: 42px 0 14px;
+      max-width: 360px;
+      font-size: 38px;
+      line-height: 1.02;
+      letter-spacing: 0;
+    }
+
+    .side p {
+      margin: 0;
+      max-width: 360px;
+      color: #d1d5db;
+      line-height: 1.65;
+    }
+
+    .side-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 30px;
+    }
+
+    .side-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #f9fafb;
+      font-weight: 750;
+    }
+
+    .side-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: var(--brand);
+      flex: 0 0 auto;
+    }
+
+    .main {
+      min-height: 100vh;
+      padding: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .shell {
+      width: min(100%, 1040px);
+      display: grid;
+      gap: 18px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(154, 52, 18, .08);
+    }
+
+    .tab {
+      border: 0;
+      border-radius: 6px;
+      padding: 10px 14px;
+      color: var(--muted);
+      background: transparent;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .tab.active {
+      background: var(--brand);
+      color: white;
+    }
+
+    .ghost {
+      border: 1px solid var(--line);
+      color: var(--brand-dark);
+      background: #fff;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-weight: 900;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 22px;
+    }
+
+    .panel h2 {
+      margin: 0 0 8px;
+      font-size: 26px;
+      letter-spacing: 0;
+    }
+
+    .panel p {
+      margin: 0 0 18px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .form {
+      display: grid;
+      gap: 12px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text);
+      background: #fffaf5;
+      outline: none;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 88px;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--brand);
+      box-shadow: 0 0 0 3px rgba(249, 115, 22, .16);
+    }
+
+    .primary {
+      min-height: 46px;
+      border: 0;
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: #fff;
+      background: var(--brand);
+      font-weight: 950;
+      box-shadow: 0 12px 28px rgba(249, 115, 22, .24);
+    }
+
+    .secondary {
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: var(--brand-dark);
+      background: #fff7ed;
+      font-weight: 900;
+    }
+
+    .map {
+      height: 340px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      overflow: hidden;
+      background: #f5f5f4;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 950;
+      text-transform: uppercase;
+    }
+
+    .status.pendente { background: #fef3c7; color: #92400e; }
+    .status.aprovado { background: #dcfce7; color: #166534; }
+    .status.reprovado, .status.suspenso { background: #fee2e2; color: #991b1b; }
+
+    .notice {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff7ed;
+      padding: 14px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .mini {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fffaf5;
+      padding: 14px;
+    }
+
+    .mini strong {
+      display: block;
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    .mini span {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+      text-transform: uppercase;
+    }
+
+    .list {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .delivery {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fffaf5;
+      display: grid;
+      gap: 8px;
+    }
+
+    .delivery-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .delivery-title {
+      font-weight: 950;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .error {
+      display: none;
+      border: 1px solid #fecaca;
+      background: #fef2f2;
+      color: #991b1b;
+      padding: 12px;
+      border-radius: 8px;
+      font-weight: 800;
+    }
+
+    .error.show { display: block; }
+    .hidden { display: none !important; }
+
+    @media (max-width: 960px) {
+      .app { grid-template-columns: 1fr; }
+      .side { min-height: auto; }
+      .side h1 { margin-top: 26px; font-size: 32px; }
+      .main { padding: 20px; align-items: start; }
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 640px) {
+      .side { padding: 22px; }
+      .topbar { align-items: stretch; flex-direction: column; }
+      .tabs { width: 100%; }
+      .tab { flex: 1; padding-inline: 8px; }
+      .row, .cards { grid-template-columns: 1fr; }
+      .panel { padding: 16px; }
+      .map { height: 280px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="side">
+      <div>
+        <div class="brand">
+          <div class="brand-mark">MB</div>
+          <div>Motoboys Blumenau</div>
+        </div>
+        <h1>Portal comercial para lojas e empresas</h1>
+        <p>Cadastre sua loja, marque a localidade correta no mapa e aguarde a aprovacao administrativa para solicitar motoboys.</p>
+        <div class="side-list">
+          <div class="side-item"><span class="side-dot"></span> Cadastro com endereco completo</div>
+          <div class="side-item"><span class="side-dot"></span> Aprovacao pelo painel admin</div>
+          <div class="side-item"><span class="side-dot"></span> Pedidos de motoboy avulso</div>
+          <div class="side-item"><span class="side-dot"></span> Base pronta para motoboy fixo</div>
+        </div>
+      </div>
+      <p class="muted">comercial.motoboysblumenau.com.br</p>
+    </aside>
+
+    <main class="main">
+      <div class="shell">
+        <div class="topbar">
+          <div class="tabs">
+            <button class="tab active" id="loginTab" type="button">Entrar</button>
+            <button class="tab" id="signupTab" type="button">Criar conta</button>
+          </div>
+          <button class="ghost hidden" id="logoutButton" type="button">Sair</button>
+        </div>
+
+        <div class="error" id="errorBox"></div>
+
+        <section class="grid" id="authView">
+          <div class="panel" id="loginPanel">
+            <h2>Entrar</h2>
+            <p>Acesse com o e-mail e senha cadastrados para acompanhar sua loja e solicitar entregas.</p>
+            <form class="form" id="loginForm">
+              <label>E-mail
+                <input autocomplete="email" id="loginEmail" required type="email" />
+              </label>
+              <label>Senha
+                <input autocomplete="current-password" id="loginPassword" required type="password" />
+              </label>
+              <button class="primary" type="submit">Entrar no portal</button>
+            </form>
+          </div>
+
+          <div class="panel hidden" id="signupPanel">
+            <h2>Criar conta comercial</h2>
+            <p>Depois do cadastro, sua loja entra como pendente ate a aprovacao no sistema admin.</p>
+            <form class="form" id="signupForm">
+              <div class="row">
+                <label>Nome da loja
+                  <input id="storeName" required />
+                </label>
+                <label>Responsavel
+                  <input id="responsibleName" required />
+                </label>
+              </div>
+              <div class="row">
+                <label>CPF/CNPJ
+                  <input id="document" inputmode="numeric" />
+                </label>
+                <label>WhatsApp
+                  <input id="phone" required />
+                </label>
+              </div>
+              <div class="row">
+                <label>E-mail
+                  <input autocomplete="email" id="signupEmail" required type="email" />
+                </label>
+                <label>Senha
+                  <input autocomplete="new-password" id="signupPassword" minlength="6" required type="password" />
+                </label>
+              </div>
+              <div class="row">
+                <label>Rua
+                  <input id="street" required />
+                </label>
+                <label>Numero
+                  <input id="number" required />
+                </label>
+              </div>
+              <div class="row">
+                <label>Bairro
+                  <input id="neighborhood" required />
+                </label>
+                <label>Complemento
+                  <input id="complement" />
+                </label>
+              </div>
+              <div class="row">
+                <label>Cidade
+                  <input id="city" required value="Blumenau" />
+                </label>
+                <label>Estado
+                  <input id="state" maxlength="2" required value="SC" />
+                </label>
+              </div>
+              <div class="notice">Clique no mapa para marcar a localidade exata da loja.</div>
+              <div class="map" id="signupMap"></div>
+              <button class="primary" type="submit">Enviar cadastro para aprovacao</button>
+            </form>
+          </div>
+
+          <div class="panel">
+            <h2>Como funciona</h2>
+            <p>O cadastro cria o acesso comercial e envia sua loja para analise. Quando aprovada, o portal libera pedidos de motoboy avulso e o historico de entregas.</p>
+            <div class="list">
+              <div class="notice">1. Crie sua conta comercial.</div>
+              <div class="notice">2. Preencha o endereco completo e marque no mapa.</div>
+              <div class="notice">3. Aguarde aprovacao pelo admin.</div>
+              <div class="notice">4. Solicite motoboys pelo portal.</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="grid hidden" id="storeView">
+          <div class="panel">
+            <div class="delivery-head">
+              <div>
+                <h2 id="storeTitle">Minha loja</h2>
+                <p id="storeSubtitle">Dados comerciais</p>
+              </div>
+              <span class="status pendente" id="storeStatus">pendente</span>
+            </div>
+
+            <div class="cards">
+              <div class="mini"><strong id="totalDeliveries">0</strong><span>Pedidos</span></div>
+              <div class="mini"><strong id="openDeliveries">0</strong><span>Em aberto</span></div>
+              <div class="mini"><strong id="finishedDeliveries">0</strong><span>Finalizados</span></div>
+            </div>
+
+            <div class="notice" id="approvalNotice" style="margin-top:14px"></div>
+
+            <form class="form hidden" id="deliveryForm" style="margin-top:16px">
+              <h2>Pedir motoboy avulso</h2>
+              <div class="row">
+                <label>Cliente / destinatario
+                  <input id="customerName" required />
+                </label>
+                <label>WhatsApp do cliente
+                  <input id="customerPhone" required />
+                </label>
+              </div>
+              <div class="row">
+                <label>Endereco de entrega
+                  <input id="deliveryAddress" required />
+                </label>
+                <label>Numero
+                  <input id="deliveryNumber" required />
+                </label>
+              </div>
+              <label>Complemento / observacoes
+                <textarea id="deliveryNotes"></textarea>
+              </label>
+              <button class="primary" type="submit">Solicitar motoboy</button>
+            </form>
+          </div>
+
+          <div class="panel">
+            <h2>Historico</h2>
+            <p>Pedidos criados por esta loja.</p>
+            <div class="list" id="deliveryList"></div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js';
+    import {
+      createUserWithEmailAndPassword,
+      getAuth,
+      onAuthStateChanged,
+      signInWithEmailAndPassword,
+      signOut,
+    } from 'https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js';
+    import {
+      collection,
+      doc,
+      getDoc,
+      getFirestore,
+      onSnapshot,
+      query,
+      setDoc,
+      where,
+    } from 'https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: 'AIzaSyAlUrhrnhXRQPV9IyfK0LSSVoZVQbfBJuo',
+      authDomain: 'motoboys-blumenau-aa9b0.firebaseapp.com',
+      projectId: 'motoboys-blumenau-aa9b0',
+      storageBucket: 'motoboys-blumenau-aa9b0.firebasestorage.app',
+      messagingSenderId: '584750631482',
+      appId: '1:584750631482:web:6ca081bb96d8492a33c303',
+      measurementId: 'G-6CQHXBJVJN',
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const $ = (id) => document.getElementById(id);
+    let selectedLocation = { lat: -26.9187, lng: -49.0661 };
+    let marker;
+    let signupMap;
+    let currentStore;
+    let unsubscribeDeliveries;
+
+    function showError(message) {
+      const box = $('errorBox');
+      box.textContent = message || '';
+      box.classList.toggle('show', Boolean(message));
+    }
+
+    function setLoading(button, loading, text) {
+      button.disabled = loading;
+      if (loading) {
+        button.dataset.originalText = button.textContent;
+        button.textContent = text || 'Aguarde...';
+      } else if (button.dataset.originalText) {
+        button.textContent = button.dataset.originalText;
+      }
+    }
+
+    function switchAuthTab(tab) {
+      const signup = tab === 'signup';
+      $('loginTab').classList.toggle('active', !signup);
+      $('signupTab').classList.toggle('active', signup);
+      $('loginPanel').classList.toggle('hidden', signup);
+      $('signupPanel').classList.toggle('hidden', !signup);
+      if (signup) setTimeout(initSignupMap, 60);
+    }
+
+    function initSignupMap() {
+      if (signupMap) {
+        signupMap.invalidateSize();
+        return;
+      }
+      signupMap = L.map('signupMap').setView([selectedLocation.lat, selectedLocation.lng], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap',
+      }).addTo(signupMap);
+      marker = L.marker([selectedLocation.lat, selectedLocation.lng], { draggable: true }).addTo(signupMap);
+      signupMap.on('click', (event) => {
+        selectedLocation = { lat: event.latlng.lat, lng: event.latlng.lng };
+        marker.setLatLng(event.latlng);
+      });
+      marker.on('dragend', () => {
+        const point = marker.getLatLng();
+        selectedLocation = { lat: point.lat, lng: point.lng };
+      });
+    }
+
+    function addressLine(store) {
+      const address = store?.address || {};
+      return [address.street, address.number, address.neighborhood, address.city, address.state]
+        .filter(Boolean)
+        .join(', ');
+    }
+
+    function statusText(status) {
+      if (status === 'aprovado') return 'Cadastro aprovado. Voce ja pode solicitar motoboys.';
+      if (status === 'reprovado') return 'Cadastro reprovado. Verifique os dados e fale com o suporte.';
+      if (status === 'suspenso') return 'Cadastro suspenso. Entre em contato com a administracao.';
+      return 'Cadastro pendente. Aguarde a aprovacao pelo sistema administrativo.';
+    }
+
+    function showStore(store) {
+      currentStore = store;
+      $('authView').classList.add('hidden');
+      $('storeView').classList.remove('hidden');
+      $('logoutButton').classList.remove('hidden');
+      $('storeTitle').textContent = store.storeName || 'Minha loja';
+      $('storeSubtitle').textContent = addressLine(store);
+      $('storeStatus').textContent = store.status || 'pendente';
+      $('storeStatus').className = `status ${store.status || 'pendente'}`;
+      $('approvalNotice').textContent = statusText(store.status);
+      $('deliveryForm').classList.toggle('hidden', store.status !== 'aprovado');
+      observeStoreDeliveries(store.ownerUid);
+    }
+
+    function showAuth() {
+      currentStore = null;
+      unsubscribeDeliveries?.();
+      $('authView').classList.remove('hidden');
+      $('storeView').classList.add('hidden');
+      $('logoutButton').classList.add('hidden');
+    }
+
+    function renderDeliveries(items) {
+      $('totalDeliveries').textContent = items.length;
+      $('openDeliveries').textContent = items.filter((item) => !['Finalizado', 'Cancelado'].includes(item.status)).length;
+      $('finishedDeliveries').textContent = items.filter((item) => item.status === 'Finalizado').length;
+      $('deliveryList').innerHTML = items.length
+        ? items.map((item) => `
+            <article class="delivery">
+              <div class="delivery-head">
+                <div class="delivery-title">Pedido ${item.protocol || item.id}</div>
+                <span class="status ${(item.status || 'pendente').toLowerCase().replaceAll(' ', '-')}">${item.status || 'Novo'}</span>
+              </div>
+              <div class="muted">${item.deliveryAddress || ''}${item.deliveryNumber ? ', ' + item.deliveryNumber : ''}</div>
+              <div class="muted">${new Date(item.createdAt || Date.now()).toLocaleString('pt-BR')}</div>
+            </article>
+          `).join('')
+        : '<div class="notice">Nenhum pedido criado ainda.</div>';
+    }
+
+    function observeStoreDeliveries(uid) {
+      unsubscribeDeliveries?.();
+      const q = query(
+        collection(db, 'deliveries'),
+        where('createdByUid', '==', uid),
+      );
+      unsubscribeDeliveries = onSnapshot(q, (snapshot) => {
+        const items = snapshot.docs
+          .map((item) => ({ id: item.id, ...item.data() }))
+          .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+        renderDeliveries(items);
+      }, () => {
+        renderDeliveries([]);
+      });
+    }
+
+    function formValue(id) {
+      return $(id).value.trim();
+    }
+
+    function createProtocol() {
+      const date = new Date();
+      const stamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
+      return `MB${stamp}${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+
+    $('loginTab').addEventListener('click', () => switchAuthTab('login'));
+    $('signupTab').addEventListener('click', () => switchAuthTab('signup'));
+
+    $('loginForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      showError('');
+      const button = event.submitter;
+      setLoading(button, true, 'Entrando...');
+      try {
+        await signInWithEmailAndPassword(auth, formValue('loginEmail'), formValue('loginPassword'));
+      } catch (error) {
+        showError(error.message || 'Nao foi possivel entrar.');
+      } finally {
+        setLoading(button, false);
+      }
+    });
+
+    $('signupForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      showError('');
+      const button = event.submitter;
+      setLoading(button, true, 'Criando cadastro...');
+      try {
+        const credential = await createUserWithEmailAndPassword(auth, formValue('signupEmail'), formValue('signupPassword'));
+        const user = credential.user;
+        const now = new Date().toISOString();
+        const userProfile = {
+          uid: user.uid,
+          email: user.email,
+          role: 'store',
+          status: 'pendente',
+          name: formValue('responsibleName'),
+          phone: formValue('phone'),
+          createdAt: now,
+          updatedAt: now,
+        };
+        const store = {
+          ownerUid: user.uid,
+          storeName: formValue('storeName'),
+          responsibleName: formValue('responsibleName'),
+          document: formValue('document'),
+          phone: formValue('phone'),
+          email: user.email,
+          address: {
+            street: formValue('street'),
+            number: formValue('number'),
+            complement: formValue('complement'),
+            neighborhood: formValue('neighborhood'),
+            city: formValue('city'),
+            state: formValue('state').toUpperCase(),
+          },
+          location: selectedLocation,
+          status: 'pendente',
+          createdAt: now,
+          updatedAt: now,
+        };
+        await setDoc(doc(db, 'commercialUsers', user.uid), userProfile);
+        await setDoc(doc(db, 'stores', user.uid), store);
+        showStore(store);
+      } catch (error) {
+        showError(error.message || 'Nao foi possivel criar o cadastro.');
+      } finally {
+        setLoading(button, false);
+      }
+    });
+
+    $('deliveryForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      showError('');
+      if (!currentStore || currentStore.status !== 'aprovado') {
+        showError('Sua loja precisa estar aprovada para solicitar motoboy.');
+        return;
+      }
+      const button = event.submitter;
+      setLoading(button, true, 'Solicitando...');
+      try {
+        const protocol = createProtocol();
+        const pickupAddress = addressLine(currentStore);
+        const now = new Date().toISOString();
+        await setDoc(doc(db, 'deliveries', protocol), {
+          id: protocol,
+          protocol,
+          createdByUid: currentStore.ownerUid,
+          storeId: currentStore.ownerUid,
+          storeName: currentStore.storeName,
+          customerName: formValue('customerName'),
+          phone: formValue('customerPhone'),
+          pickupAddress,
+          pickupNumber: currentStore.address?.number || '',
+          pickupComplement: currentStore.address?.complement || '',
+          pickupLocation: currentStore.location,
+          deliveryAddress: formValue('deliveryAddress'),
+          deliveryNumber: formValue('deliveryNumber'),
+          deliveryComplement: formValue('deliveryNotes'),
+          notes: formValue('deliveryNotes'),
+          status: 'Novo',
+          createdAt: now,
+          updatedAt: now,
+        });
+        $('deliveryForm').reset();
+      } catch (error) {
+        showError(error.message || 'Nao foi possivel solicitar o motoboy.');
+      } finally {
+        setLoading(button, false);
+      }
+    });
+
+    $('logoutButton').addEventListener('click', () => signOut(auth));
+
+    onAuthStateChanged(auth, async (user) => {
+      showError('');
+      if (!user) {
+        showAuth();
+        return;
+      }
+      const snapshot = await getDoc(doc(db, 'stores', user.uid));
+      if (snapshot.exists()) {
+        showStore({ id: snapshot.id, ...snapshot.data() });
+      } else {
+        showError('Conta encontrada, mas ainda nao existe cadastro de loja.');
+        showAuth();
+      }
+    });
+  </script>
+</body>
+</html>
