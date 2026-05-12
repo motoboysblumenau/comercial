@@ -1033,19 +1033,24 @@
                   <label>Valor da arrancada
                     <input id="startFee" inputmode="decimal" placeholder="Ex: 40,00" />
                   </label>
-                  <label>Valor ate 4 km
-                    <input id="baseRouteFee" inputmode="decimal" placeholder="Ex: 10,00" />
+                  <label>Valor ate quantos km?
+                    <input id="baseRouteKm" inputmode="decimal" placeholder="Ex: 5" />
                   </label>
                 </div>
                 <div class="row">
-                  <label>KM inicial da faixa extra
-                    <input id="extraKmFrom" inputmode="decimal" placeholder="Ex: 4" />
+                  <label>Valor dessa primeira faixa
+                    <input id="baseRouteFee" inputmode="decimal" placeholder="Ex: 10,00" />
                   </label>
-                  <label>Valor da faixa extra
-                    <input id="extraRouteFee" inputmode="decimal" placeholder="Ex: 15,00" />
+                  <label>Valor depois do ultimo km preenchido
+                    <input id="finalRouteFee" inputmode="decimal" placeholder="Ex: 20,00" />
                   </label>
                 </div>
+                <div id="routeRanges" class="form" style="gap:10px"></div>
+                <button class="btn ghost" id="addRouteRange" type="button">Adicionar variavel de km</button>
               </div>
+              <label>Telefone para contato com motoboys*
+                <input id="fixedContactPhone" inputmode="tel" placeholder="(47) 99999-9999" required />
+              </label>
               <label>Oferece janta?
                 <select id="offersDinner">
                   <option value="nao">Nao</option>
@@ -1252,6 +1257,10 @@
 
     function moneyToNumber(value) {
       return Number(String(value || '').replace(/\./g, '').replace(',', '.')) || 0;
+    }
+
+    function decimalToNumber(value) {
+      return Number(String(value || '').replace(',', '.')) || 0;
     }
 
     function formatDateTime(value) {
@@ -1710,7 +1719,8 @@
               <strong>${escapeHtml(item.startTime)} ate ${escapeHtml(item.endTime)}</strong>
               <span class="status aprovado">Oferta ativa</span>
             </div>
-            <p>${item.paymentMode === 'fixo' ? `Valor fixo: ${currency(item.fixedValue)}` : `Arrancada: ${currency(item.startFee)} + rota base ${currency(item.baseRouteFee)}`}</p>
+            <p>${item.paymentMode === 'fixo' ? `Valor fixo: ${currency(item.fixedValue)}` : `Arrancada: ${currency(item.startFee)} + ate ${item.baseRouteKm || '--'} km por ${currency(item.baseRouteFee)} + final ${currency(item.finalRouteFee)}`}</p>
+            <p style="color:var(--muted);font-size:13px">Contato motoboys: ${escapeHtml(item.contactPhone || item.storePhone || '--')}</p>
             <p style="color:var(--muted);font-size:13px">Janta: ${item.offersDinner === 'sim' ? 'sim' : 'nao'} - Bag/bau: ${escapeHtml(item.bagRequirement || 'qualquer')}</p>
             <button class="btn ghost" type="button" data-fixed-status="${escapeHtml(item.id)}" data-status="preenchida">Ja foi preenchida</button>
             <button class="btn secondary" type="button" data-fixed-status="${escapeHtml(item.id)}" data-status="cancelada">Cancelar</button>
@@ -1727,6 +1737,32 @@
           .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
         renderFixedOffers(items);
       }, () => renderFixedOffers([]));
+    }
+
+    function addRouteRangeRow(fromKm = '') {
+      const row = document.createElement('div');
+      row.className = 'row route-range-row';
+      row.innerHTML = `
+        <label>Valor de ${escapeHtml(fromKm || 'ultimo km')} km ate
+          <input class="route-range-to" inputmode="decimal" placeholder="Ex: 8" />
+        </label>
+        <label>Valor dessa variavel
+          <input class="route-range-price" inputmode="decimal" placeholder="Ex: 15,00" />
+        </label>
+        <button class="btn secondary" type="button" data-remove-range>Remover</button>
+      `;
+      $('routeRanges').appendChild(row);
+    }
+
+    function getRouteRanges() {
+      let previousKm = decimalToNumber(formValue('baseRouteKm'));
+      return Array.from(document.querySelectorAll('.route-range-row')).map((row) => {
+        const toKm = decimalToNumber(row.querySelector('.route-range-to')?.value);
+        const price = moneyToNumber(row.querySelector('.route-range-price')?.value);
+        const range = { fromKm: previousKm, toKm, price };
+        previousKm = toKm || previousKm;
+        return range;
+      }).filter((range) => range.toKm > range.fromKm && range.price > 0);
     }
 
     function showDashboardSection(section) {
@@ -1749,10 +1785,10 @@
       }, () => renderDeliveries([]));
     }
 
-    async function createOrUpdateStoreSupport(reason, text) {
+    async function createOrUpdateStoreSupport(reason, text, options = {}) {
       if (!currentStore || !text) return '';
       const now = new Date().toISOString();
-      const ticketId = supportTicketId || `store-${currentStore.ownerUid}-${Date.now()}`;
+      const ticketId = options.forceNew ? `store-${currentStore.ownerUid}-${Date.now()}` : supportTicketId || `store-${currentStore.ownerUid}-${Date.now()}`;
       const ticket = {
         id: ticketId,
         type: 'store',
@@ -1776,6 +1812,10 @@
       const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const ticketRef = doc(db, 'supportTickets', ticketId);
       const existingTicket = await getDoc(ticketRef);
+      if (existingTicket.exists() && existingTicket.data()?.status === 'encerrado') {
+        const freshId = `store-${currentStore.ownerUid}-${Date.now()}`;
+        return createOrUpdateStoreSupport(reason, text, { forceNew: true, preferredTicketId: freshId });
+      }
       await setDoc(ticketRef, existingTicket.exists() ? {
         status: 'aberto',
         lastMessage: text,
@@ -1821,6 +1861,17 @@
       const perDelivery = $('fixedPaymentMode').value === 'por_entrega';
       $('fixedValueWrap').classList.toggle('hidden', perDelivery);
       $('routeValueWrap').classList.toggle('hidden', !perDelivery);
+    });
+    $('addRouteRange').addEventListener('click', () => {
+      const rows = Array.from(document.querySelectorAll('.route-range-row'));
+      const lastTo = rows.length
+        ? rows[rows.length - 1].querySelector('.route-range-to')?.value
+        : formValue('baseRouteKm');
+      addRouteRangeRow(lastTo);
+    });
+    $('routeRanges').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-remove-range]');
+      if (button) button.closest('.route-range-row')?.remove();
     });
     $('cep').addEventListener('blur', fillAddressByCep);
     $('deliveryList').addEventListener('click', (event) => {
@@ -2064,7 +2115,7 @@
       const button = event.submitter;
       setLoading(button, true, 'Abrindo...');
       try {
-        await createOrUpdateStoreSupport(reason, text);
+        await createOrUpdateStoreSupport(reason, text, { forceNew: true });
         $('supportInitialText').value = '';
         $('newSupportForm').classList.add('hidden');
       } catch (error) {
@@ -2090,6 +2141,7 @@
           storeUid: currentStore.ownerUid,
           storeName: currentStore.storeName,
           storePhone: currentStore.phone,
+          contactPhone: formValue('fixedContactPhone'),
           storeAddress: formatStoreAddress(currentStore),
           storeLocation: currentStore.location,
           status: 'aberta',
@@ -2098,9 +2150,10 @@
           paymentMode,
           fixedValue: paymentMode === 'fixo' ? moneyToNumber(formValue('fixedValue')) : 0,
           startFee: paymentMode === 'por_entrega' ? moneyToNumber(formValue('startFee')) : 0,
+          baseRouteKm: paymentMode === 'por_entrega' ? decimalToNumber(formValue('baseRouteKm')) : 0,
           baseRouteFee: paymentMode === 'por_entrega' ? moneyToNumber(formValue('baseRouteFee')) : 0,
-          extraKmFrom: paymentMode === 'por_entrega' ? moneyToNumber(formValue('extraKmFrom')) : 0,
-          extraRouteFee: paymentMode === 'por_entrega' ? moneyToNumber(formValue('extraRouteFee')) : 0,
+          routeRanges: paymentMode === 'por_entrega' ? getRouteRanges() : [],
+          finalRouteFee: paymentMode === 'por_entrega' ? moneyToNumber(formValue('finalRouteFee')) : 0,
           offersDinner: formValue('offersDinner'),
           bagRequirement: formValue('bagRequirement'),
           notes: formValue('fixedNotes'),
@@ -2108,8 +2161,13 @@
           updatedAt: now,
         };
         await setDoc(offerRef, offer);
-        await createOrUpdateStoreSupport('Motoboy fixo', `Nova oferta de motoboy fixo criada pela loja. Horario: ${offer.startTime} ate ${offer.endTime}.`);
+        try {
+          await createOrUpdateStoreSupport('Motoboy fixo', `Nova oferta de motoboy fixo criada pela loja. Horario: ${offer.startTime} ate ${offer.endTime}. Contato: ${offer.contactPhone}.`, { forceNew: true });
+        } catch {
+          // A oferta ja foi criada; se o suporte estiver sem regra publicada, nao bloqueia o comerciante.
+        }
         $('fixedMotoboyForm').reset();
+        $('routeRanges').innerHTML = '';
         $('fixedValueWrap').classList.remove('hidden');
         $('routeValueWrap').classList.add('hidden');
       } catch (error) {
