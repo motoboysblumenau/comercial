@@ -595,6 +595,58 @@
 
     .tour-step.active { display: block; }
 
+    #tourModal {
+      background: transparent;
+      place-items: start;
+      pointer-events: none;
+      padding: 0;
+    }
+
+    #tourModal .modal-card {
+      position: fixed;
+      width: min(340px, calc(100vw - 28px));
+      padding: 16px;
+      pointer-events: auto;
+      border: 1px solid rgba(225, 29, 72, .22);
+      box-shadow: 0 18px 44px rgba(17, 24, 39, .18);
+    }
+
+    #tourModal .modal-head h3 {
+      font-size: 17px;
+    }
+
+    .tour-highlight {
+      position: relative;
+      z-index: 60;
+      outline: 3px solid rgba(225, 29, 72, .45);
+      outline-offset: 4px;
+      border-radius: 8px;
+    }
+
+    #newsPopup {
+      position: fixed;
+      inset: auto 18px 18px auto;
+      z-index: 70;
+      display: block;
+      width: min(360px, calc(100vw - 28px));
+      background: transparent;
+      padding: 0;
+    }
+
+    #newsPopup.hidden { display: none; }
+
+    #newsPopup .modal-card {
+      width: 100%;
+      max-height: none;
+      padding: 16px;
+      border: 1px solid rgba(225, 29, 72, .22);
+      box-shadow: 0 18px 44px rgba(17, 24, 39, .22);
+    }
+
+    #newsPopup .modal-head h3 {
+      font-size: 16px;
+    }
+
     .notice {
       border: 1px solid #fed7aa;
       background: #fff7ed;
@@ -1297,8 +1349,10 @@
     let supportTickets = [];
     let latestDeliveries = [];
     let latestNews = [];
+    let newsSnapshotReady = false;
     let fixedOffers = [];
     let tourStep = 0;
+    const tourTargets = ['[data-open-fixed]', '[data-nav="pedidos"]', '[data-nav="fixo"]', '[data-nav="suporte"]'];
     let unsubscribeStore;
     let unsubscribeSupport;
     let unsubscribeSupportTickets;
@@ -1670,6 +1724,7 @@
       observeStoreDeliveries(store.ownerUid);
       observeStoreSupport(store);
       observeFixedOffers(store.ownerUid);
+      newsSnapshotReady = false;
       observeNews();
       maybeShowTour(store);
     }
@@ -1863,22 +1918,25 @@
         const items = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))
           .filter((item) => !item.audience || ['stores', 'commercial', 'all'].includes(item.audience))
           .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+        const previousLatestId = latestNews[0]?.id;
         renderNews(items);
-        maybeShowNewsPopup(items[0]);
+        const incomingLatest = items[0];
+        if (newsSnapshotReady && incomingLatest?.id && incomingLatest.id !== previousLatestId) {
+          showNewsToast(incomingLatest);
+        }
+        newsSnapshotReady = true;
       }, () => renderNews([]));
     }
 
-    function maybeShowNewsPopup(item) {
+    function showNewsToast(item) {
       if (!item?.id || !currentStore) return;
-      const key = `mb-store-news-seen-${currentStore.ownerUid}`;
-      if (localStorage.getItem(key) === item.id) return;
-      localStorage.setItem(key, item.id);
       $('newsPopupTitle').textContent = item.title || 'Aviso';
       $('newsPopupContent').innerHTML = `
-        ${item.imageUrl ? `<img src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.title || 'Aviso')}" style="width:100%;max-height:320px;object-fit:cover;border-radius:8px;margin-bottom:12px" />` : ''}
-        <p style="line-height:1.65;color:var(--muted);font-weight:750">${escapeHtml(item.message || item.body || item.text || '')}</p>
+        <p style="line-height:1.55;color:var(--muted);font-weight:750;margin:0">${escapeHtml(item.message || item.body || item.text || 'Nova noticia publicada pela administracao.').slice(0, 140)}</p>
+        <button class="btn red" id="openNewsFromToast" type="button" style="margin-top:12px;width:100%">Clique para saber mais</button>
       `;
       $('newsPopup').classList.remove('hidden');
+      setTimeout(() => $('newsPopup').classList.add('hidden'), 9000);
     }
 
     function renderFixedOffers(items) {
@@ -1951,6 +2009,7 @@
       steps.forEach((step) => step.classList.toggle('active', Number(step.dataset.tourStep) === tourStep));
       $('prevTour').disabled = tourStep === 0;
       $('nextTour').textContent = tourStep === steps.length - 1 ? 'Finalizar' : 'Proximo';
+      positionTourPopover();
     }
 
     function maybeShowTour(store) {
@@ -1959,6 +2018,34 @@
       localStorage.setItem(key, 'done');
       showTourStep(0);
       $('tourModal').classList.remove('hidden');
+      positionTourPopover();
+    }
+
+    function closeTourPopover() {
+      document.querySelectorAll('.tour-highlight').forEach((item) => item.classList.remove('tour-highlight'));
+      $('tourModal').classList.add('hidden');
+    }
+
+    function positionTourPopover() {
+      const modal = $('tourModal');
+      const card = modal.querySelector('.modal-card');
+      if (!card) return;
+      document.querySelectorAll('.tour-highlight').forEach((item) => item.classList.remove('tour-highlight'));
+      const target = document.querySelector(tourTargets[tourStep]);
+      if (!target) {
+        card.style.left = '18px';
+        card.style.top = '18px';
+        return;
+      }
+      target.classList.add('tour-highlight');
+      const rect = target.getBoundingClientRect();
+      const cardWidth = Math.min(340, window.innerWidth - 28);
+      const left = Math.max(14, Math.min(window.innerWidth - cardWidth - 14, rect.left + rect.width / 2 - cardWidth / 2));
+      const belowTop = rect.bottom + 12;
+      const aboveTop = rect.top - 180;
+      const top = belowTop + 190 < window.innerHeight ? belowTop : Math.max(14, aboveTop);
+      card.style.left = `${left}px`;
+      card.style.top = `${top}px`;
     }
 
     function observeStoreDeliveries(uid) {
@@ -2072,14 +2159,20 @@
     $('closeNewsPopup').addEventListener('click', () => $('newsPopup').classList.add('hidden'));
     $('newsPopup').addEventListener('click', (event) => {
       if (event.target.id === 'newsPopup') $('newsPopup').classList.add('hidden');
+      if (event.target.id === 'openNewsFromToast') {
+        $('newsPopup').classList.add('hidden');
+        showDashboardSection('noticias');
+      }
     });
-    $('closeTour').addEventListener('click', () => $('tourModal').classList.add('hidden'));
+    $('closeTour').addEventListener('click', closeTourPopover);
     $('prevTour').addEventListener('click', () => showTourStep(tourStep - 1));
     $('nextTour').addEventListener('click', () => {
       const steps = document.querySelectorAll('[data-tour-step]').length;
-      if (tourStep >= steps - 1) $('tourModal').classList.add('hidden');
+      if (tourStep >= steps - 1) closeTourPopover();
       else showTourStep(tourStep + 1);
     });
+    window.addEventListener('resize', positionTourPopover);
+    window.addEventListener('scroll', positionTourPopover, true);
     $('supportTicketList').addEventListener('click', (event) => {
       const button = event.target.closest('[data-open-support]');
       if (button) openSupportTicket(button.dataset.openSupport);
