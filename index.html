@@ -514,6 +514,87 @@
       gap: 12px;
     }
 
+    .compact-ticket {
+      display: grid;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--green);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fff;
+    }
+
+    .compact-ticket.closed {
+      border-left-color: #94a3b8;
+      background: #f8fafc;
+      opacity: .84;
+    }
+
+    .compact-ticket p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .inline-km {
+      display: grid;
+      grid-template-columns: auto minmax(72px, 110px) auto;
+      align-items: center;
+      gap: 8px;
+      font-weight: 850;
+    }
+
+    .inline-km input { min-height: 42px; }
+
+    .chart-grid {
+      display: grid;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .chart-row {
+      display: grid;
+      grid-template-columns: 150px 1fr 86px;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .chart-track {
+      height: 12px;
+      border-radius: 999px;
+      background: #e5e7eb;
+      overflow: hidden;
+    }
+
+    .chart-bar {
+      height: 100%;
+      width: var(--value, 0%);
+      border-radius: 999px;
+      background: linear-gradient(90deg, #f97316, #e11d48);
+    }
+
+    .news-card img {
+      width: 100%;
+      max-height: 210px;
+      object-fit: cover;
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+
+    .tour-step {
+      display: none;
+      line-height: 1.6;
+      color: var(--muted);
+      font-weight: 750;
+    }
+
+    .tour-step.active { display: block; }
+
     .notice {
       border: 1px solid #fed7aa;
       background: #fff7ed;
@@ -964,6 +1045,7 @@
             <h2>Entregadores no mapa</h2>
             <p>Mostra entregas desta loja e pontos de entregadores quando a localizacao estiver disponivel.</p>
             <div id="courierMap" class="map" style="height:330px"></div>
+            <button class="btn ghost" style="margin-top:12px" type="button" data-open-map>Ver entregadores no mapa</button>
           </div>
         </div>
         </section>
@@ -979,11 +1061,14 @@
           <div class="panel">
             <h2>Performance geral</h2>
             <div class="dashboard-grid" style="grid-template-columns:repeat(2,1fr)">
+              <div class="metric"><strong id="metricMonthSpent">R$ 0,00</strong><span>Gasto no mes</span></div>
               <div class="metric"><strong id="metricWeek">0</strong><span>Pedidos nesta semana</span></div>
               <div class="metric"><strong id="metricCanceled">0</strong><span>Cancelados</span></div>
               <div class="metric"><strong id="metricAverage">--</strong><span>Ticket medio</span></div>
               <div class="metric"><strong id="metricActive">0</strong><span>Em andamento</span></div>
+              <div class="metric"><strong id="metricMonthOrders">0</strong><span>Pedidos no mes</span></div>
             </div>
+            <div id="performanceCharts" class="chart-grid"></div>
             <div class="notice" style="margin-top:14px">A performance considera os pedidos criados por esta loja. Relatorios financeiros detalhados entram na proxima etapa.</div>
           </div>
         </section>
@@ -1033,14 +1118,12 @@
                   <label>Valor da arrancada
                     <input id="startFee" inputmode="decimal" placeholder="Ex: 40,00" />
                   </label>
-                  <label>Valor ate quantos km?
-                    <input id="baseRouteKm" inputmode="decimal" placeholder="Ex: 5" />
+                  <label>
+                    <span class="inline-km">Valor ate <input id="baseRouteKm" inputmode="decimal" placeholder="5" /> km</span>
+                    <input id="baseRouteFee" inputmode="decimal" placeholder="Ex: 10,00" />
                   </label>
                 </div>
                 <div class="row">
-                  <label>Valor dessa primeira faixa
-                    <input id="baseRouteFee" inputmode="decimal" placeholder="Ex: 10,00" />
-                  </label>
                   <label>Valor depois do ultimo km preenchido
                     <input id="finalRouteFee" inputmode="decimal" placeholder="Ex: 20,00" />
                   </label>
@@ -1134,6 +1217,35 @@
     </div>
   </div>
 
+  <div id="newsPopup" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 id="newsPopupTitle">Aviso</h3>
+        <button class="icon-btn" id="closeNewsPopup" type="button">x</button>
+      </div>
+      <div id="newsPopupContent"></div>
+    </div>
+  </div>
+
+  <div id="tourModal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3>Como usar o portal</h3>
+        <button class="icon-btn" id="closeTour" type="button">x</button>
+      </div>
+      <div>
+        <p class="tour-step active" data-tour-step="0">No inicio voce solicita motoboy avulso, acompanha pedidos abertos e ve o mapa com entregadores vinculados as entregas da sua loja.</p>
+        <p class="tour-step" data-tour-step="1">Em pedidos, use o botao Detalhes para ver horario de criacao, aceite, coleta, entrega, valor, observacoes e dados do cliente.</p>
+        <p class="tour-step" data-tour-step="2">Em Motoboy fixo, voce cria uma oferta com horario, pagamento, faixas de km, telefone de contato, janta, bag ou bau.</p>
+        <p class="tour-step" data-tour-step="3">Em suporte e noticias, voce fala com a administracao e recebe avisos importantes para a operacao da loja.</p>
+      </div>
+      <div class="actions">
+        <button class="btn ghost" id="prevTour" type="button">Voltar</button>
+        <button class="btn red" id="nextTour" type="button">Proximo</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js';
@@ -1186,6 +1298,8 @@
     let latestDeliveries = [];
     let latestNews = [];
     let fixedOffers = [];
+    let tourStep = 0;
+    let unsubscribeStore;
     let unsubscribeSupport;
     let unsubscribeSupportTickets;
     let unsubscribeDeliveries;
@@ -1536,6 +1650,13 @@
       $('pendingStoreName').textContent = store.storeName || 'Sua loja';
       $('pendingStoreAddress').textContent = formatStoreAddress(store);
       $('pendingStoreProduct').textContent = `Tipo de produto: ${storeProduct(store)}`;
+      const statusText = store.status === 'suspenso'
+        ? 'Sua loja esta suspensa pela administracao. Entre em contato pelo suporte ou WhatsApp da operacao.'
+        : store.status === 'reprovado'
+          ? 'Cadastro reprovado. Verifique os dados e fale com a administracao.'
+          : 'Cadastro pendente. Iremos analisar as informacoes da loja.';
+      const pendingMessage = document.querySelector('#pendingPage .empty');
+      if (pendingMessage) pendingMessage.textContent = statusText;
       showPage('pendingPage');
     }
 
@@ -1550,6 +1671,7 @@
       observeStoreSupport(store);
       observeFixedOffers(store.ownerUid);
       observeNews();
+      maybeShowTour(store);
     }
 
     function statusMessage(item) {
@@ -1570,14 +1692,24 @@
       const finished = items.filter((item) => item.status === 'Finalizado');
       const canceled = items.filter((item) => item.status === 'Cancelado');
       const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
       const week = items.filter((item) => new Date(item.createdAt || 0).getTime() >= weekAgo);
+      const month = items.filter((item) => new Date(item.createdAt || 0).getTime() >= monthStart.getTime());
       const paid = finished.reduce((total, item) => total + Number(item.estimatedPrice || 0), 0);
+      const monthSpent = month
+        .filter((item) => item.status === 'Finalizado')
+        .reduce((total, item) => total + Number(item.estimatedPrice || 0), 0);
       $('metricOpen').textContent = open.length;
       $('metricFinished').textContent = finished.length;
       $('metricWeek').textContent = week.length;
       $('metricCanceled').textContent = canceled.length;
       $('metricAverage').textContent = finished.length ? currency(paid / finished.length) : currency(0);
       $('metricActive').textContent = open.filter((item) => item.assignedMotoboyId || item.assignedMotoboyUid).length;
+      $('metricMonthSpent').textContent = currency(monthSpent);
+      $('metricMonthOrders').textContent = month.length;
+      renderPerformanceCharts({ open: open.length, finished: finished.length, canceled: canceled.length, week: week.length, month: month.length, monthSpent });
       $('deliveryList').innerHTML = items.length
         ? items.map((item) => `
           <article class="delivery">
@@ -1593,6 +1725,29 @@
         `).join('')
         : '<div class="empty">Nenhum pedido criado ainda.</div>';
       renderCourierMap(open);
+    }
+
+    function renderPerformanceCharts(data) {
+      const maxCount = Math.max(1, data.month, data.week, data.finished, data.open, data.canceled);
+      const rows = [
+        ['Pedidos no mes', data.month, `${data.month}`],
+        ['Pedidos na semana', data.week, `${data.week}`],
+        ['Finalizados', data.finished, `${data.finished}`],
+        ['Em aberto', data.open, `${data.open}`],
+        ['Cancelados', data.canceled, `${data.canceled}`],
+      ];
+      $('performanceCharts').innerHTML = `
+        <div class="panel" style="box-shadow:none;padding:14px">
+          <h3 style="margin:0 0 12px">Resumo visual</h3>
+          ${rows.map(([label, value, display]) => `
+            <div class="chart-row">
+              <span>${label}</span>
+              <div class="chart-track"><div class="chart-bar" style="--value:${Math.round((value / maxCount) * 100)}%"></div></div>
+              <strong>${display}</strong>
+            </div>
+          `).join('')}
+        </div>
+      `;
     }
 
     function openDeliveryDetails(id) {
@@ -1641,14 +1796,16 @@
       supportTickets = items;
       $('supportTicketList').innerHTML = items.length
         ? items.map((ticket) => `
-          <article class="delivery">
+          <article class="compact-ticket ${ticket.status === 'encerrado' ? 'closed' : ''}">
             <div class="delivery-head">
               <strong>${escapeHtml(ticket.reason || 'Suporte')}</strong>
               <span class="status ${ticket.status || 'aberto'}">${escapeHtml(ticket.status || 'aberto')}</span>
             </div>
             <p>${escapeHtml(ticket.lastMessage || ticket.message || '')}</p>
-            <p style="color:var(--muted);font-size:13px">${formatDateTime(ticket.lastMessageAt || ticket.createdAt)}</p>
-            <button class="btn ghost" type="button" data-open-support="${escapeHtml(ticket.id)}">Abrir chat</button>
+            <div class="delivery-head">
+              <small style="color:var(--muted);font-weight:850">${formatDateTime(ticket.lastMessageAt || ticket.createdAt)}</small>
+              <button class="btn ghost" type="button" data-open-support="${escapeHtml(ticket.id)}">Abrir chat</button>
+            </div>
           </article>
         `).join('')
         : '<div class="empty">Nenhum suporte ativo.</div>';
@@ -1687,7 +1844,8 @@
       latestNews = items;
       $('newsList').innerHTML = items.length
         ? items.map((item) => `
-          <article class="delivery">
+          <article class="delivery news-card">
+            ${item.imageUrl ? `<img src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.title || 'Aviso')}" />` : ''}
             <div class="delivery-head">
               <strong>${escapeHtml(item.title || 'Aviso')}</strong>
               <span>${formatDateTime(item.createdAt)}</span>
@@ -1706,7 +1864,21 @@
           .filter((item) => !item.audience || ['stores', 'commercial', 'all'].includes(item.audience))
           .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
         renderNews(items);
+        maybeShowNewsPopup(items[0]);
       }, () => renderNews([]));
+    }
+
+    function maybeShowNewsPopup(item) {
+      if (!item?.id || !currentStore) return;
+      const key = `mb-store-news-seen-${currentStore.ownerUid}`;
+      if (localStorage.getItem(key) === item.id) return;
+      localStorage.setItem(key, item.id);
+      $('newsPopupTitle').textContent = item.title || 'Aviso';
+      $('newsPopupContent').innerHTML = `
+        ${item.imageUrl ? `<img src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.title || 'Aviso')}" style="width:100%;max-height:320px;object-fit:cover;border-radius:8px;margin-bottom:12px" />` : ''}
+        <p style="line-height:1.65;color:var(--muted);font-weight:750">${escapeHtml(item.message || item.body || item.text || '')}</p>
+      `;
+      $('newsPopup').classList.remove('hidden');
     }
 
     function renderFixedOffers(items) {
@@ -1743,13 +1915,11 @@
       const row = document.createElement('div');
       row.className = 'row route-range-row';
       row.innerHTML = `
-        <label>Valor de ${escapeHtml(fromKm || 'ultimo km')} km ate
-          <input class="route-range-to" inputmode="decimal" placeholder="Ex: 8" />
-        </label>
-        <label>Valor dessa variavel
+        <label>
+          <span class="inline-km">Valor de ${escapeHtml(fromKm || 'ultimo')} km ate <input class="route-range-to" inputmode="decimal" placeholder="8" /> km</span>
           <input class="route-range-price" inputmode="decimal" placeholder="Ex: 15,00" />
         </label>
-        <button class="btn secondary" type="button" data-remove-range>Remover</button>
+        <button class="btn secondary" type="button" data-remove-range style="align-self:end">Remover</button>
       `;
       $('routeRanges').appendChild(row);
     }
@@ -1773,6 +1943,22 @@
         item.classList.toggle('active', item.dataset.nav === section);
       });
       if (section === 'mapa') setTimeout(() => courierMapFull?.invalidateSize?.(), 80);
+    }
+
+    function showTourStep(index) {
+      const steps = Array.from(document.querySelectorAll('[data-tour-step]'));
+      tourStep = Math.max(0, Math.min(steps.length - 1, index));
+      steps.forEach((step) => step.classList.toggle('active', Number(step.dataset.tourStep) === tourStep));
+      $('prevTour').disabled = tourStep === 0;
+      $('nextTour').textContent = tourStep === steps.length - 1 ? 'Finalizar' : 'Proximo';
+    }
+
+    function maybeShowTour(store) {
+      const key = `mb-store-tour-${store.ownerUid}`;
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, 'done');
+      showTourStep(0);
+      $('tourModal').classList.remove('hidden');
     }
 
     function observeStoreDeliveries(uid) {
@@ -1848,6 +2034,7 @@
     document.querySelectorAll('[data-step-link]').forEach((button) => button.addEventListener('click', () => showStep(Number(button.dataset.stepLink))));
     document.querySelectorAll('[data-nav]').forEach((button) => button.addEventListener('click', () => showDashboardSection(button.dataset.nav)));
     document.querySelectorAll('[data-open-fixed]').forEach((button) => button.addEventListener('click', () => showDashboardSection('fixo')));
+    document.querySelectorAll('[data-open-map]').forEach((button) => button.addEventListener('click', () => showDashboardSection('mapa')));
     document.querySelectorAll('[data-choice="hasCnpj"]').forEach((button) => {
       button.addEventListener('click', () => {
         hasCnpj = button.dataset.value;
@@ -1881,6 +2068,17 @@
     $('closeDeliveryDetail').addEventListener('click', closeDeliveryDetails);
     $('deliveryDetailModal').addEventListener('click', (event) => {
       if (event.target.id === 'deliveryDetailModal') closeDeliveryDetails();
+    });
+    $('closeNewsPopup').addEventListener('click', () => $('newsPopup').classList.add('hidden'));
+    $('newsPopup').addEventListener('click', (event) => {
+      if (event.target.id === 'newsPopup') $('newsPopup').classList.add('hidden');
+    });
+    $('closeTour').addEventListener('click', () => $('tourModal').classList.add('hidden'));
+    $('prevTour').addEventListener('click', () => showTourStep(tourStep - 1));
+    $('nextTour').addEventListener('click', () => {
+      const steps = document.querySelectorAll('[data-tour-step]').length;
+      if (tourStep >= steps - 1) $('tourModal').classList.add('hidden');
+      else showTourStep(tourStep + 1);
     });
     $('supportTicketList').addEventListener('click', (event) => {
       const button = event.target.closest('[data-open-support]');
@@ -2203,12 +2401,15 @@
         unsubscribeSupportTickets?.();
         unsubscribeNews?.();
         unsubscribeFixedOffers?.();
+        unsubscribeStore?.();
         showPage('authPage');
         return;
       }
-      const snapshot = await getDoc(doc(db, 'stores', user.uid));
-      if (snapshot.exists()) showStore({ id: snapshot.id, ...snapshot.data() });
-      else showPage('signupPage');
+      unsubscribeStore?.();
+      unsubscribeStore = onSnapshot(doc(db, 'stores', user.uid), (snapshot) => {
+        if (snapshot.exists()) showStore({ id: snapshot.id, ...snapshot.data() });
+        else showPage('signupPage');
+      }, () => showPage('signupPage'));
     });
   </script>
 </body>
