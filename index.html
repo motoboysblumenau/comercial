@@ -611,8 +611,33 @@
       box-shadow: 0 18px 44px rgba(17, 24, 39, .18);
     }
 
+    #tourModal .modal-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
     #tourModal .modal-head h3 {
+      margin: 0;
       font-size: 17px;
+    }
+
+    #tourModal .icon-btn {
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      width: 28px;
+      height: 28px;
+      min-height: 28px;
+      border: 0;
+      border-radius: 999px;
+      background: #f3f4f6;
+      color: #111827;
+      font-size: 18px;
+      font-weight: 900;
+      line-height: 1;
     }
 
     .tour-highlight {
@@ -643,8 +668,38 @@
       box-shadow: 0 18px 44px rgba(17, 24, 39, .22);
     }
 
+    #newsPopup .modal-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
     #newsPopup .modal-head h3 {
+      margin: 0;
       font-size: 16px;
+    }
+
+    #newsPopup .icon-btn {
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      width: 28px;
+      height: 28px;
+      min-height: 28px;
+      border: 0;
+      border-radius: 999px;
+      background: #f3f4f6;
+      color: #111827;
+      font-size: 18px;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    #newsPopup .icon-btn:hover {
+      background: #fee2e2;
+      color: var(--red);
     }
 
     .notice {
@@ -961,7 +1016,7 @@
             </label>
             <label style="display:flex;align-items:flex-start;gap:10px;font-weight:750">
               <input id="acceptedCommercialTerms" type="checkbox" required style="width:18px;min-height:18px;margin-top:3px" />
-              <span>Li e aceito os termos comerciais. Entendo que poderao existir cobrancas e taxas operacionais, sempre informadas pela administracao antes de serem aplicadas.</span>
+              <span>Li e aceito os <a href="./termos-comerciante.html" target="_blank" rel="noreferrer">termos de uso para comerciantes</a>. Entendo que poderao existir cobrancas e taxas operacionais, sempre informadas pela administracao antes de serem aplicadas.</span>
             </label>
           </div>
           <div class="actions">
@@ -1273,7 +1328,7 @@
     <div class="modal-card">
       <div class="modal-head">
         <h3 id="newsPopupTitle">Aviso</h3>
-        <button class="icon-btn" id="closeNewsPopup" type="button">x</button>
+        <button class="icon-btn" id="closeNewsPopup" type="button" aria-label="Fechar">×</button>
       </div>
       <div id="newsPopupContent"></div>
     </div>
@@ -1282,8 +1337,8 @@
   <div id="tourModal" class="modal-backdrop hidden">
     <div class="modal-card">
       <div class="modal-head">
-        <h3>Como usar o portal</h3>
-        <button class="icon-btn" id="closeTour" type="button">x</button>
+        <h3 id="tourTitle">Como usar o portal</h3>
+        <button class="icon-btn" id="closeTour" type="button" aria-label="Fechar">×</button>
       </div>
       <div>
         <p class="tour-step active" data-tour-step="0">No inicio voce solicita motoboy avulso, acompanha pedidos abertos e ve o mapa com entregadores vinculados as entregas da sua loja.</p>
@@ -1353,6 +1408,7 @@
     let fixedOffers = [];
     let tourStep = 0;
     const tourTargets = ['[data-open-fixed]', '[data-nav="pedidos"]', '[data-nav="fixo"]', '[data-nav="suporte"]'];
+    const tourTitles = ['Pedir motoboy fixo', 'Detalhes dos pedidos', 'Oferta de motoboy fixo', 'Suporte da loja'];
     let unsubscribeStore;
     let unsubscribeSupport;
     let unsubscribeSupportTickets;
@@ -1848,10 +1904,10 @@
     }
 
     function renderSupportTickets(items) {
-      supportTickets = items;
-      $('supportTicketList').innerHTML = items.length
-        ? items.map((ticket) => `
-          <article class="compact-ticket ${ticket.status === 'encerrado' ? 'closed' : ''}">
+      supportTickets = items.filter((ticket) => ticket.status !== 'encerrado');
+      $('supportTicketList').innerHTML = supportTickets.length
+        ? supportTickets.map((ticket) => `
+          <article class="compact-ticket">
             <div class="delivery-head">
               <strong>${escapeHtml(ticket.reason || 'Suporte')}</strong>
               <span class="status ${ticket.status || 'aberto'}">${escapeHtml(ticket.status || 'aberto')}</span>
@@ -1864,7 +1920,7 @@
           </article>
         `).join('')
         : '<div class="empty">Nenhum suporte ativo.</div>';
-      if (!supportTicketId && items.length) openSupportTicket(items[0].id);
+      if (!supportTicketId && supportTickets.length) openSupportTicket(supportTickets[0].id);
     }
 
     function openSupportTicket(id) {
@@ -2007,6 +2063,7 @@
       const steps = Array.from(document.querySelectorAll('[data-tour-step]'));
       tourStep = Math.max(0, Math.min(steps.length - 1, index));
       steps.forEach((step) => step.classList.toggle('active', Number(step.dataset.tourStep) === tourStep));
+      $('tourTitle').textContent = tourTitles[tourStep] || 'Como usar o portal';
       $('prevTour').disabled = tourStep === 0;
       $('nextTour').textContent = tourStep === steps.length - 1 ? 'Finalizar' : 'Proximo';
       positionTourPopover();
