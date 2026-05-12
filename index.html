@@ -1523,11 +1523,13 @@
     }
 
     function estimateDelivery(distanceKm) {
+      const minimumPrice = 8;
       const gasolinePrice = 6.25;
       const fuelCost = (distanceKm / 30) * gasolinePrice;
       const maintenanceCost = distanceKm * 0.25;
       const operationalCost = distanceKm * 1.2;
-      const estimatedPrice = fuelCost + maintenanceCost + operationalCost;
+      const calculatedPrice = fuelCost + maintenanceCost + operationalCost;
+      const estimatedPrice = Math.max(minimumPrice, calculatedPrice);
       return {
         distanceKm: Number(distanceKm.toFixed(1)),
         estimatedTime: Math.ceil(14 + distanceKm * 2.6),
@@ -1536,6 +1538,8 @@
           fuelCost: Number(fuelCost.toFixed(2)),
           maintenanceCost: Number(maintenanceCost.toFixed(2)),
           operationalCost: Number(operationalCost.toFixed(2)),
+          minimumPrice,
+          calculatedPrice: Number(calculatedPrice.toFixed(2)),
           gasolinePrice,
         },
       };
