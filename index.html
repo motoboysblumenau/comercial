@@ -479,6 +479,99 @@
       font-size: 13px;
     }
 
+    .metric.highlight {
+      background: linear-gradient(135deg, #111827, #3b0b17);
+      color: #fff;
+      border-color: transparent;
+      box-shadow: 0 16px 32px rgba(17, 24, 39, .18);
+    }
+
+    .metric.highlight span {
+      color: rgba(255,255,255,.76);
+    }
+
+    .store-quick-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .quick-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 14px;
+      display: grid;
+      gap: 8px;
+      min-height: 116px;
+    }
+
+    .quick-card strong {
+      font-size: 15px;
+    }
+
+    .quick-card span {
+      color: var(--muted);
+      font-weight: 760;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .address-picker {
+      position: relative;
+      display: grid;
+      gap: 8px;
+    }
+
+    .suggestions {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      z-index: 30;
+      display: none;
+      max-height: 260px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 18px 42px rgba(17, 24, 39, .16);
+    }
+
+    .suggestions.show {
+      display: block;
+    }
+
+    .suggestion-item {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      padding: 11px 12px;
+      text-align: left;
+      border-bottom: 1px solid #f1f5f9;
+      cursor: pointer;
+    }
+
+    .suggestion-item strong {
+      display: block;
+      font-size: 13px;
+    }
+
+    .suggestion-item span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .address-helper {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
     .content-grid {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
@@ -1251,9 +1344,24 @@
         </div>
 
         <div class="dashboard-grid">
-          <div class="metric"><strong id="metricOpen">0</strong><span>Pedidos em aberto</span></div>
+          <div class="metric highlight"><strong id="metricOpen">0</strong><span>Pedidos em aberto</span></div>
           <div class="metric"><strong id="metricFinished">0</strong><span>Finalizados</span></div>
           <div class="metric"><strong>Em breve</strong><span>Faturas em construcao</span></div>
+        </div>
+
+        <div class="store-quick-grid">
+          <button class="quick-card" type="button" data-nav="pedidos">
+            <strong>Pedidos da loja</strong>
+            <span>Acompanhe status, codigo de coleta, chat com motoboy e detalhes de cada rota.</span>
+          </button>
+          <button class="quick-card" type="button" data-open-map>
+            <strong>Mapa operacional</strong>
+            <span>Veja pontos de entrega e motoboys vinculados aos seus pedidos ativos.</span>
+          </button>
+          <button class="quick-card" type="button" data-nav="suporte">
+            <strong>Suporte direto</strong>
+            <span>Abra um chamado com a administracao quando precisar de ajuda na operacao.</span>
+          </button>
         </div>
 
         <div class="content-grid">
@@ -1275,13 +1383,20 @@
               </label>
               <div class="row">
                 <label>Endereco de entrega*
-                  <input id="deliveryAddress" list="streetSuggestions" required placeholder="Digite a rua em Blumenau" />
+                  <span class="address-picker">
+                    <input id="deliveryAddress" data-address-input data-address-index="0" autocomplete="off" required placeholder="Digite rua, avenida ou referencia em Blumenau" />
+                    <span id="deliveryAddressSuggestions" class="suggestions"></span>
+                  </span>
+                  <small class="address-helper">Escolha uma sugestao da lista para salvar a coordenada correta.</small>
                   <datalist id="streetSuggestions"></datalist>
                 </label>
                 <label>Numero*
                   <input id="deliveryNumber" required />
                 </label>
               </div>
+              <label>Bairro do destino
+                <input id="deliveryNeighborhood" placeholder="Ex: Centro, Velha, Garcia" />
+              </label>
               <label>Complemento do destino
                 <input id="deliveryComplement" placeholder="Apartamento, sala, referencia" />
               </label>
@@ -1579,6 +1694,7 @@
     let currentStore;
     let currentEstimate;
     let extraStopCount = 0;
+    let selectedDeliveryLocations = {};
     let supportTicketId;
     let supportTickets = [];
     let latestDeliveries = [];
@@ -1749,6 +1865,7 @@
       const customerName = formValue(index ? `customerName${suffix}` : 'customerName');
       const address = formValue(index ? `deliveryAddress${suffix}` : 'deliveryAddress');
       const number = formValue(index ? `deliveryNumber${suffix}` : 'deliveryNumber');
+      const neighborhood = formValue(index ? `deliveryNeighborhood${suffix}` : 'deliveryNeighborhood');
       const complement = formValue(index ? `deliveryComplement${suffix}` : 'deliveryComplement');
       const phoneValue = index ? formValue(`customerPhone${suffix}`) : formValue('customerPhone');
       return {
@@ -1757,6 +1874,7 @@
         phone: phoneValue,
         deliveryAddress: address,
         deliveryNumber: number,
+        deliveryNeighborhood: neighborhood,
         deliveryComplement: complement,
         deliveryLocation: estimate.destinationLocation || null,
         distanceKm: estimate.distanceKm || 0,
@@ -1788,12 +1906,19 @@
             </div>
             <div class="row">
               <label>Endereco de entrega*
-                <input id="deliveryAddress${number}" list="streetSuggestions" required placeholder="Digite a rua em Blumenau" />
+                <span class="address-picker">
+                  <input id="deliveryAddress${number}" data-address-input data-address-index="${number}" autocomplete="off" required placeholder="Digite rua, avenida ou referencia em Blumenau" />
+                  <span id="deliveryAddressSuggestions${number}" class="suggestions"></span>
+                </span>
+                <small class="address-helper">Escolha uma sugestao da lista para evitar calculo errado.</small>
               </label>
               <label>Numero*
                 <input id="deliveryNumber${number}" required />
               </label>
             </div>
+            <label>Bairro do destino
+              <input id="deliveryNeighborhood${number}" placeholder="Ex: Centro, Velha, Garcia" />
+            </label>
             <label>Complemento do destino
               <input id="deliveryComplement${number}" placeholder="Apartamento, sala, referencia" />
             </label>
@@ -1808,24 +1933,121 @@
       $('requestDelivery').disabled = true;
     }
 
-    async function geocodeAddress(address, number = '') {
+    async function resolveStopDestination(index, address, number, neighborhood) {
+      const key = deliveryLocationKey(index);
+      const selected = selectedDeliveryLocations[key];
+      if (selected && String(selected.rawInput || '').trim() === String(address || '').trim()) {
+        return {
+          lat: selected.lat,
+          lng: selected.lng,
+          label: selected.label,
+          source: 'autocomplete',
+        };
+      }
+      return geocodeAddress(address, number, neighborhood);
+    }
+
+    function deliveryLocationKey(index) {
+      return String(index || 0);
+    }
+
+    function suggestionBoxId(index) {
+      return index ? `deliveryAddressSuggestions${index}` : 'deliveryAddressSuggestions';
+    }
+
+    function normalizeAddressParts(result) {
+      const address = result?.address || {};
+      const street = address.road || address.pedestrian || address.footway || address.cycleway || address.neighbourhood || '';
+      const neighborhood = address.suburb || address.neighbourhood || address.city_district || address.quarter || '';
+      return {
+        street,
+        neighborhood,
+        label: result?.display_name || '',
+      };
+    }
+
+    async function searchDeliveryAddresses(term, index = 0) {
+      const clean = String(term || '').trim();
+      const box = $(suggestionBoxId(index));
+      if (!box || clean.length < 3) {
+        box?.classList.remove('show');
+        return;
+      }
+      const neighborhood = formValue(index ? `deliveryNeighborhood${index}` : 'deliveryNeighborhood');
+      try {
+        const params = new URLSearchParams({
+          format: 'jsonv2',
+          q: [clean, neighborhood, 'Blumenau', 'Santa Catarina', 'Brasil'].filter(Boolean).join(', '),
+          addressdetails: '1',
+          limit: '8',
+          countrycodes: 'br',
+          bounded: '1',
+          viewbox: '-49.225,-26.760,-48.930,-27.080',
+        });
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
+        const data = await response.json();
+        const results = data
+          .filter((item) => String(item.display_name || '').toLowerCase().includes('blumenau'))
+          .map((item) => ({ ...item, parts: normalizeAddressParts(item) }));
+        box.innerHTML = results.length
+          ? results.map((item, resultIndex) => `
+            <button class="suggestion-item" type="button" data-address-result="${index}" data-result-index="${resultIndex}">
+              <strong>${escapeHtml(item.parts.street || clean)}</strong>
+              <span>${escapeHtml(item.display_name || '')}</span>
+            </button>
+          `).join('')
+          : '<div class="suggestion-item"><strong>Nenhuma rua encontrada</strong><span>Tente rua + bairro + numero.</span></div>';
+        box._results = results;
+        box.classList.add('show');
+      } catch {
+        box.classList.remove('show');
+      }
+    }
+
+    function selectDeliveryAddress(index, resultIndex) {
+      const box = $(suggestionBoxId(index));
+      const result = box?._results?.[Number(resultIndex)];
+      if (!result) return;
+      const parts = normalizeAddressParts(result);
+      const suffix = index ? String(index) : '';
+      const inputId = index ? `deliveryAddress${suffix}` : 'deliveryAddress';
+      const neighborhoodId = index ? `deliveryNeighborhood${suffix}` : 'deliveryNeighborhood';
+      $(inputId).value = parts.street || parts.label;
+      if (parts.neighborhood && $(neighborhoodId)) $(neighborhoodId).value = parts.neighborhood;
+      selectedDeliveryLocations[deliveryLocationKey(index)] = {
+        lat: Number(result.lat),
+        lng: Number(result.lon),
+        label: result.display_name,
+        street: parts.street,
+        neighborhood: parts.neighborhood,
+        rawInput: $(inputId).value,
+      };
+      box.classList.remove('show');
+      resetDeliveryEstimate();
+    }
+
+    async function geocodeAddress(address, number = '', neighborhood = '') {
       const raw = String(address || '').trim();
       const candidates = [
-        raw,
-        [raw, number, 'Blumenau', 'Santa Catarina', 'Brasil'].filter(Boolean).join(', '),
-        [raw.split(',')[0], number, 'Blumenau', 'Santa Catarina', 'Brasil'].filter(Boolean).join(', '),
+        [raw, number, neighborhood, 'Blumenau', 'Santa Catarina', 'Brasil'].filter(Boolean).join(', '),
+        [raw, neighborhood, 'Blumenau', 'Santa Catarina', 'Brasil'].filter(Boolean).join(', '),
+        [raw.split(',')[0], number, neighborhood, 'Blumenau', 'Santa Catarina', 'Brasil'].filter(Boolean).join(', '),
       ].filter(Boolean);
 
       for (const candidate of candidates) {
         const params = new URLSearchParams({
-          format: 'json',
+          format: 'jsonv2',
           q: candidate,
-          limit: '1',
+          addressdetails: '1',
+          limit: '5',
           countrycodes: 'br',
+          bounded: '1',
+          viewbox: '-49.225,-26.760,-48.930,-27.080',
         });
         const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
         const data = await response.json();
-        if (data?.length) return { lat: Number(data[0].lat), lng: Number(data[0].lon), label: data[0].display_name };
+        const match = data?.find((item) => String(item.display_name || '').toLowerCase().includes('blumenau'));
+        if (match) return { lat: Number(match.lat), lng: Number(match.lon), label: match.display_name };
       }
       return null;
     }
@@ -2098,13 +2320,29 @@
     }
 
     function deliveryTimeline(item) {
+      const stops = Array.isArray(item.stops) && item.stops.length ? item.stops : [{
+        customerName: item.customerName,
+        deliveryAddress: item.deliveryAddress,
+        deliveryNumber: item.deliveryNumber,
+      }];
+      const deliveredStops = Array.isArray(item.deliveredStops) ? item.deliveredStops : [];
+      const currentStopIndex = Number(item.currentStopIndex || 0);
       const events = [
         ['Pedido criado', item.createdAt, true],
         ['Motoboy aceitou', item.assignedAt, Boolean(item.assignedAt)],
         ['Chegou na loja', item.pickupArrivedAt, Boolean(item.pickupArrivedAt)],
         ['Codigo conferido pela loja', item.pickupCodeConfirmedAt, Boolean(item.pickupCodeConfirmedAt)],
         ['Pedido coletado', item.pickedUpAt, Boolean(item.pickedUpAt)],
-        ['Chegou no cliente', item.deliveryArrivedAt, Boolean(item.deliveryArrivedAt)],
+        ...stops.flatMap((stop, index) => {
+          const delivered = deliveredStops.find((entry) => Number(entry.stopIndex || 0) === index + 1);
+          const headingToClient = stops.length > 1 ? `A caminho do cliente ${index + 1}` : 'A caminho do cliente';
+          const arrivedClient = stops.length > 1 ? `Chegou no cliente ${index + 1}` : 'Chegou no cliente';
+          const movingToThisStop = Boolean(item.pickedUpAt) && (currentStopIndex >= index || delivered || item.deliveryArrivedAt);
+          return [
+            [headingToClient, index === 0 ? item.pickedUpAt : deliveredStops[index - 1]?.deliveredAt, movingToThisStop],
+            [arrivedClient, delivered?.deliveredAt || (index === stops.length - 1 ? item.deliveryArrivedAt : ''), Boolean(delivered || (index === stops.length - 1 && item.deliveryArrivedAt))],
+          ];
+        }),
         [item.status === 'Cancelado' ? 'Rota cancelada' : 'Rota finalizada', item.canceledAt || item.finishedAt, ['Cancelado', 'Finalizado'].includes(item.status)],
       ];
       const firstPending = events.findIndex(([, , done]) => !done);
@@ -2816,32 +3054,25 @@
     let streetSearchTimer;
     $('deliveryForm').addEventListener('input', (event) => {
       if (!event.target.id?.startsWith('deliveryAddress')) return;
-      currentEstimate = null;
-      $('estimateBox').classList.add('hidden');
-      $('requestDelivery').disabled = true;
+      resetDeliveryEstimate();
+      const index = Number(event.target.dataset.addressIndex || 0);
+      delete selectedDeliveryLocations[deliveryLocationKey(index)];
       clearTimeout(streetSearchTimer);
       streetSearchTimer = setTimeout(async () => {
-        const term = event.target.value.trim();
-        if (term.length < 3) return;
-        try {
-          const params = new URLSearchParams({
-            format: 'json',
-            q: `${term}, Blumenau, Santa Catarina, Brasil`,
-            city: 'Blumenau',
-            state: 'Santa Catarina',
-            country: 'Brasil',
-            limit: '8',
-          });
-          const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
-          const data = await response.json();
-          $('streetSuggestions').innerHTML = data.map((item) => `<option value="${String(item.display_name || '').replace(/"/g, '&quot;')}"></option>`).join('');
-        } catch {}
+        searchDeliveryAddresses(event.target.value, index);
       }, 350);
     });
+    $('deliveryForm').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-address-result]');
+      if (!button) return;
+      selectDeliveryAddress(Number(button.dataset.addressResult || 0), Number(button.dataset.resultIndex || 0));
+    });
+    document.addEventListener('click', (event) => {
+      if (event.target.closest('.address-picker')) return;
+      document.querySelectorAll('.suggestions').forEach((box) => box.classList.remove('show'));
+    });
     $('deliveryNumber').addEventListener('input', () => {
-      currentEstimate = null;
-      $('estimateBox').classList.add('hidden');
-      $('requestDelivery').disabled = true;
+      resetDeliveryEstimate();
     });
     ['street', 'number', 'neighborhood', 'city', 'state'].forEach((id) => $(id).addEventListener('blur', locateAddressOnMap));
     $('editAddress').addEventListener('click', () => showStep(2));
@@ -2865,12 +3096,17 @@
           const suffix = index ? String(index) : '';
           const address = formValue(index ? `deliveryAddress${suffix}` : 'deliveryAddress');
           const number = formValue(index ? `deliveryNumber${suffix}` : 'deliveryNumber');
+          const neighborhood = formValue(index ? `deliveryNeighborhood${suffix}` : 'deliveryNeighborhood');
           const customerName = formValue(index ? `customerName${suffix}` : 'customerName');
-          if (!address || !number || !customerName) {
-            showError('Preencha cliente, endereco e numero de todas as entregas antes de calcular.');
+          if (!address || !number || !customerName || !neighborhood) {
+            showError('Preencha cliente, endereco, numero e bairro de todas as entregas antes de calcular.');
             return;
           }
-          const destination = await geocodeAddress(address, number);
+          const destination = await resolveStopDestination(index, address, number, neighborhood);
+          if (!destination) {
+            showError(`Nao consegui localizar a entrega ${index + 1}. Escolha uma sugestao do autocomplete e confira bairro e numero.`);
+            return;
+          }
           const fallbackDistance = calculateDistanceKm(origin, destination || origin);
           const estimate = estimateDelivery(fallbackDistance || 1.8);
           rawStops.push({
@@ -3049,6 +3285,7 @@
         });
         $('deliveryForm').reset();
         extraStopCount = 0;
+        selectedDeliveryLocations = {};
         renderExtraStops();
         currentEstimate = null;
         $('estimateBox').classList.add('hidden');
