@@ -859,6 +859,11 @@
     }
 
     .error.show { display: block; }
+    .error.success {
+      border-color: #bbf7d0;
+      background: #f0fdf4;
+      color: #166534;
+    }
     .hidden { display: none !important; }
 
     @media (max-width: 980px) {
@@ -1171,9 +1176,6 @@
               <label>Complemento do destino
                 <input id="deliveryComplement" placeholder="Apartamento, sala, referencia" />
               </label>
-              <label>Codigo de coleta
-                <input id="pickupCode" maxlength="12" placeholder="Opcional: codigo que o motoboy deve confirmar" />
-              </label>
               <label>Observacoes para o motoboy
                 <textarea id="deliveryNotes" placeholder="Ex: retirar no balcao, levar maquina, cuidado com pacote"></textarea>
               </label>
@@ -1412,6 +1414,7 @@
       onSnapshot,
       query,
       setDoc,
+      updateDoc,
       where,
     } from 'https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js';
 
@@ -1468,7 +1471,16 @@
     function showError(message) {
       const box = $('errorBox');
       box.textContent = message || '';
+      box.classList.remove('success');
       box.classList.toggle('show', Boolean(message));
+    }
+
+    function showToast(message) {
+      const box = $('errorBox');
+      box.textContent = message || '';
+      box.classList.add('success');
+      box.classList.toggle('show', Boolean(message));
+      setTimeout(() => showError(''), 4200);
     }
 
     function setLoading(button, loading, text) {
@@ -1519,6 +1531,14 @@
 
     function currency(value) {
       return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    function compactCode(value) {
+      return String(value || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(-4);
+    }
+
+    function pickupVerificationCode(item) {
+      return compactCode(item?.pickupCode || item?.protocol || item?.id || '0000') || '0000';
     }
 
     function moneyToNumber(value) {
@@ -1593,7 +1613,6 @@
       const address = formValue(index ? `deliveryAddress${suffix}` : 'deliveryAddress');
       const number = formValue(index ? `deliveryNumber${suffix}` : 'deliveryNumber');
       const complement = formValue(index ? `deliveryComplement${suffix}` : 'deliveryComplement');
-      const pickupCode = formValue(index ? `pickupCode${suffix}` : 'pickupCode');
       const phoneValue = index ? formValue(`customerPhone${suffix}`) : formValue('customerPhone');
       return {
         stopIndex: index + 1,
@@ -1602,7 +1621,6 @@
         deliveryAddress: address,
         deliveryNumber: number,
         deliveryComplement: complement,
-        pickupCode,
         deliveryLocation: estimate.destinationLocation || null,
         distanceKm: estimate.distanceKm || 0,
         estimatedTime: estimate.estimatedTime || 0,
@@ -1641,9 +1659,6 @@
             </div>
             <label>Complemento do destino
               <input id="deliveryComplement${number}" placeholder="Apartamento, sala, referencia" />
-            </label>
-            <label>Codigo de coleta
-              <input id="pickupCode${number}" maxlength="12" placeholder="Opcional" />
             </label>
           </div>
         `;
@@ -1830,30 +1845,40 @@
       initCourierMap();
       courierLayer.clearLayers();
       courierLayerFull.clearLayers();
-      const points = [];
-      const addToMaps = (layerFactory) => {
-        layerFactory().addTo(courierLayer);
-        layerFactory().addTo(courierLayerFull);
-      };
+      const deliveryPoints = [];
+      const motoboyPoints = [];
       if (currentStore?.location) {
         const point = [currentStore.location.lat, currentStore.location.lng];
-        points.push(point);
-        addToMaps(() => L.marker(point).bindPopup(currentStore.storeName || 'Loja'));
+        deliveryPoints.push(point);
+        motoboyPoints.push(point);
+        L.marker(point).bindPopup(currentStore.storeName || 'Loja').addTo(courierLayer);
+        L.marker(point).bindPopup(currentStore.storeName || 'Loja').addTo(courierLayerFull);
       }
       deliveries.forEach((delivery) => {
+        const stops = Array.isArray(delivery.stops) && delivery.stops.length ? delivery.stops : [delivery];
+        stops.forEach((stop, index) => {
+          const location = stop.deliveryLocation || (index === 0 ? delivery.deliveryLocation : null);
+          if (!location?.lat || !location?.lng) return;
+          const point = [Number(location.lat), Number(location.lng)];
+          deliveryPoints.push(point);
+          L.circleMarker(point, { radius: 8, color: '#ef003f', fillColor: '#ef003f', fillOpacity: .85 })
+            .bindPopup(`Pedido ${delivery.protocol || delivery.id}<br>Entrega ${index + 1}: ${stop.customerName || delivery.customerName || 'Cliente'}<br>${delivery.status || 'Novo'}`)
+            .addTo(courierLayer);
+        });
         const location = delivery.motoboyLocation || delivery.assignedMotoboyLocation || delivery.lastMotoboyLocation;
         if (!location?.lat || !location?.lng) return;
         const point = [Number(location.lat), Number(location.lng)];
-        points.push(point);
-        addToMaps(() => L.circleMarker(point, { radius: 8, color: '#2563eb', fillColor: '#2563eb', fillOpacity: .8 })
-          .bindPopup(`${delivery.assignedMotoboyName || 'Entregador'} - ${delivery.status || 'em rota'}`));
+        motoboyPoints.push(point);
+        L.circleMarker(point, { radius: 8, color: '#2563eb', fillColor: '#2563eb', fillOpacity: .8 })
+          .bindPopup(`${delivery.assignedMotoboyName || 'Entregador'}<br>Status: ${delivery.status || 'em rota'}<br>Pedido: ${delivery.protocol || delivery.id || '--'}`)
+          .addTo(courierLayerFull);
       });
-      if (points.length > 1) {
-        courierMap.fitBounds(points, { padding: [30, 30] });
-        courierMapFull.fitBounds(points, { padding: [30, 30] });
-      } else if (points.length) {
-        courierMap.setView(points[0], 14);
-        courierMapFull.setView(points[0], 14);
+      if (deliveryPoints.length > 1) courierMap.fitBounds(deliveryPoints, { padding: [30, 30] });
+      else if (deliveryPoints.length) courierMap.setView(deliveryPoints[0], 14);
+      if (motoboyPoints.length > 1) {
+        courierMapFull.fitBounds(motoboyPoints, { padding: [30, 30] });
+      } else if (motoboyPoints.length) {
+        courierMapFull.setView(motoboyPoints[0], 14);
       }
     }
 
@@ -1947,7 +1972,10 @@
             <p>${escapeHtml(item.deliveryAddress || '')}${item.deliveryNumber ? ', ' + escapeHtml(item.deliveryNumber) : ''}</p>
             <p style="color:var(--muted);font-size:13px">${escapeHtml(statusMessage(item))}</p>
             <p style="color:var(--muted);font-size:13px">${currency(item.estimatedPrice || 0)} - ${item.distanceKm || '--'} km</p>
-            <button class="btn ghost" type="button" data-delivery-detail="${escapeHtml(item.id || item.protocol)}">Detalhes</button>
+            <div class="delivery-head" style="gap:8px;flex-wrap:wrap">
+              <button class="btn ghost" type="button" data-delivery-detail="${escapeHtml(item.id || item.protocol)}">Detalhes</button>
+              ${!['Finalizado', 'Cancelado'].includes(item.status) ? `<button class="btn secondary" type="button" data-delivery-cancel="${escapeHtml(item.id || item.protocol)}">Cancelar rota</button>` : ''}
+            </div>
           </article>
         `).join('')
         : '<div class="empty">Nenhum pedido criado ainda.</div>';
@@ -2004,10 +2032,28 @@
           <div class="detail-item"><span>Previsao</span><strong>${item.estimatedTime || '--'} min</strong></div>
           <div class="detail-item"><span>Entregas</span><strong>${stops.length}</strong></div>
         </div>
+        ${!['Finalizado', 'Cancelado'].includes(item.status) ? `
+          <div class="delivery-head" style="margin-top:12px;gap:8px;flex-wrap:wrap">
+            <button class="btn ghost" type="button" data-edit-delivery="${escapeHtml(item.id || item.protocol)}">Alterar informacoes do pedido</button>
+            <button class="btn secondary" type="button" data-delivery-cancel="${escapeHtml(item.id || item.protocol)}">Cancelar rota</button>
+          </div>
+        ` : ''}
+        ${item.assignedMotoboyId || item.assignedMotoboyUid ? `
+          <form class="detail-item" style="margin-top:12px" data-confirm-pickup="${escapeHtml(item.id || item.protocol)}">
+            <span>Conferir codigo de coleta</span>
+            <strong>${item.pickupCodeConfirmedAt ? `Codigo conferido em ${formatDateTime(item.pickupCodeConfirmedAt)}` : 'Digite o codigo que aparece no aplicativo do motoboy.'}</strong>
+            ${item.pickupCodeConfirmedAt ? '' : `
+              <div class="row" style="margin-top:10px">
+                <input name="pickupCodeCheck" maxlength="8" placeholder="Ex: ${escapeHtml(pickupVerificationCode(item))}" />
+                <button class="btn red" type="submit">Confirmar codigo</button>
+              </div>
+            `}
+          </form>
+        ` : ''}
         <div class="detail-item" style="margin-top:12px"><span>Retirada</span><strong>${escapeHtml(item.pickupAddress || '')}${item.pickupComplement ? ' - ' + escapeHtml(item.pickupComplement) : ''}</strong></div>
         ${stops.map((stop, index) => `
           <div class="detail-item" style="margin-top:12px">
-            <span>Entrega ${index + 1}${stop.pickupCode ? ' - codigo ' + escapeHtml(stop.pickupCode) : ''}</span>
+            <span>Entrega ${index + 1}</span>
             <strong>${escapeHtml(stop.customerName || '--')} - ${escapeHtml(stop.deliveryAddress || '')}${stop.deliveryNumber ? ', ' + escapeHtml(stop.deliveryNumber) : ''}${stop.deliveryComplement ? ' - ' + escapeHtml(stop.deliveryComplement) : ''}</strong>
           </div>
         `).join('')}
@@ -2018,6 +2064,62 @@
 
     function closeDeliveryDetails() {
       $('deliveryDetailModal').classList.add('hidden');
+    }
+
+    async function confirmPickupCode(deliveryId, code) {
+      const item = latestDeliveries.find((delivery) => String(delivery.id || delivery.protocol) === String(deliveryId));
+      if (!item) return;
+      if (compactCode(code) !== pickupVerificationCode(item)) {
+        showError('Codigo incorreto. Confira o codigo no aplicativo do motoboy e tente novamente.');
+        return;
+      }
+      await updateDoc(doc(db, 'deliveries', item.id || item.protocol), {
+        pickupCodeConfirmedAt: new Date().toISOString(),
+        pickupCodeConfirmedByStore: true,
+        pickupCodeConfirmedStoreUid: currentStore?.ownerUid || '',
+        pickupCodeConfirmedStoreName: currentStore?.storeName || '',
+        updatedAt: new Date().toISOString(),
+      });
+      showToast('Codigo conferido com sucesso! O motoboy ja pode coletar o pedido.');
+      closeDeliveryDetails();
+    }
+
+    async function cancelDelivery(deliveryId) {
+      const item = latestDeliveries.find((delivery) => String(delivery.id || delivery.protocol) === String(deliveryId));
+      if (!item || ['Finalizado', 'Cancelado'].includes(item.status)) return;
+      if (!confirm(`Cancelar a rota ${item.protocol || item.id}?`)) return;
+      await updateDoc(doc(db, 'deliveries', item.id || item.protocol), {
+        status: 'Cancelado',
+        canceledAt: new Date().toISOString(),
+        canceledByStore: true,
+        updatedAt: new Date().toISOString(),
+      });
+      showToast('Rota cancelada. A administracao e o motoboy serao atualizados.');
+    }
+
+    async function editDeliveryBasic(deliveryId) {
+      const item = latestDeliveries.find((delivery) => String(delivery.id || delivery.protocol) === String(deliveryId));
+      if (!item || ['Finalizado', 'Cancelado'].includes(item.status)) return;
+      const customerName = prompt('Nome do cliente/destinatario:', item.customerName || '');
+      if (customerName === null) return;
+      const deliveryAddress = prompt('Endereco de entrega:', item.deliveryAddress || '');
+      if (deliveryAddress === null) return;
+      const deliveryNumber = prompt('Numero da entrega:', item.deliveryNumber || '');
+      if (deliveryNumber === null) return;
+      const deliveryComplement = prompt('Complemento/referencia:', item.deliveryComplement || '');
+      if (deliveryComplement === null) return;
+      const notes = prompt('Observacoes para o motoboy:', item.notes || '');
+      if (notes === null) return;
+      await updateDoc(doc(db, 'deliveries', item.id || item.protocol), {
+        customerName: customerName.trim(),
+        deliveryAddress: deliveryAddress.trim(),
+        deliveryNumber: deliveryNumber.trim(),
+        deliveryComplement: deliveryComplement.trim(),
+        notes: notes.trim(),
+        updatedAt: new Date().toISOString(),
+      });
+      showToast('Informacoes do pedido atualizadas para a loja, administracao e aplicativo.');
+      closeDeliveryDetails();
     }
 
     function renderSupportMessages(items) {
@@ -2356,12 +2458,25 @@
     });
     $('cep').addEventListener('blur', fillAddressByCep);
     $('deliveryList').addEventListener('click', (event) => {
-      const button = event.target.closest('[data-delivery-detail]');
-      if (button) openDeliveryDetails(button.dataset.deliveryDetail);
+      const detailButton = event.target.closest('[data-delivery-detail]');
+      if (detailButton) openDeliveryDetails(detailButton.dataset.deliveryDetail);
+      const cancelButton = event.target.closest('[data-delivery-cancel]');
+      if (cancelButton) cancelDelivery(cancelButton.dataset.deliveryCancel).catch((error) => showError(error.message || 'Nao foi possivel cancelar a rota.'));
     });
     $('closeDeliveryDetail').addEventListener('click', closeDeliveryDetails);
     $('deliveryDetailModal').addEventListener('click', (event) => {
       if (event.target.id === 'deliveryDetailModal') closeDeliveryDetails();
+      const cancelButton = event.target.closest('[data-delivery-cancel]');
+      if (cancelButton) cancelDelivery(cancelButton.dataset.deliveryCancel).catch((error) => showError(error.message || 'Nao foi possivel cancelar a rota.'));
+      const editButton = event.target.closest('[data-edit-delivery]');
+      if (editButton) editDeliveryBasic(editButton.dataset.editDelivery).catch((error) => showError(error.message || 'Nao foi possivel editar o pedido.'));
+    });
+    $('deliveryDetailModal').addEventListener('submit', (event) => {
+      const form = event.target.closest('[data-confirm-pickup]');
+      if (!form) return;
+      event.preventDefault();
+      confirmPickupCode(form.dataset.confirmPickup, form.elements.pickupCodeCheck?.value || '')
+        .catch((error) => showError(error.message || 'Nao foi possivel conferir o codigo.'));
     });
     $('closeNewsPopup').addEventListener('click', () => $('newsPopup').classList.add('hidden'));
     $('newsPopup').addEventListener('click', (event) => {
@@ -2401,18 +2516,19 @@
       }, { merge: true });
     });
     let streetSearchTimer;
-    $('deliveryAddress').addEventListener('input', () => {
+    $('deliveryForm').addEventListener('input', (event) => {
+      if (!event.target.id?.startsWith('deliveryAddress')) return;
       currentEstimate = null;
       $('estimateBox').classList.add('hidden');
       $('requestDelivery').disabled = true;
       clearTimeout(streetSearchTimer);
       streetSearchTimer = setTimeout(async () => {
-        const term = $('deliveryAddress').value.trim();
+        const term = event.target.value.trim();
         if (term.length < 3) return;
         try {
           const params = new URLSearchParams({
             format: 'json',
-            street: term,
+            q: `${term}, Blumenau, Santa Catarina, Brasil`,
             city: 'Blumenau',
             state: 'Santa Catarina',
             country: 'Brasil',
@@ -2615,9 +2731,10 @@
           deliveryNumber: firstStop.deliveryNumber || formValue('deliveryNumber'),
           deliveryComplement: firstStop.deliveryComplement || formValue('deliveryComplement'),
           deliveryLocation: currentEstimate.destinationLocation,
-          pickupCode: firstStop.pickupCode || formValue('pickupCode') || '',
-          pickupCodeRequired: Boolean(firstStop.pickupCode || formValue('pickupCode')),
-          stops,
+          stops: stops.map((stop) => {
+            const { pickupCode, ...cleanStop } = stop;
+            return cleanStop;
+          }),
           deliveryCount: stops.length,
           multiStop: stops.length > 1,
           notes: formValue('deliveryNotes'),
