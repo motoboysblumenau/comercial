@@ -505,6 +505,14 @@
       border-radius: 8px;
       padding: 14px;
       background: #fff;
+      box-shadow: 0 12px 28px rgba(17, 24, 39, .06);
+      transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+    }
+
+    .delivery:hover {
+      border-color: rgba(239, 0, 63, .26);
+      transform: translateY(-1px);
+      box-shadow: 0 18px 34px rgba(17, 24, 39, .1);
     }
 
     .delivery-head {
@@ -512,6 +520,107 @@
       align-items: center;
       justify-content: space-between;
       gap: 12px;
+    }
+
+    .delivery-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .mini-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      background: #f3f4f6;
+      color: #374151;
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .mini-badge.warn {
+      background: #fff7ed;
+      color: #9a3412;
+    }
+
+    .mini-badge.ok {
+      background: #ecfdf5;
+      color: #047857;
+    }
+
+    .mini-badge.danger {
+      background: #fef2f2;
+      color: #991b1b;
+    }
+
+    .action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fafafa;
+    }
+
+    .timeline-item {
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      gap: 10px;
+      align-items: start;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 760;
+    }
+
+    .timeline-dot {
+      width: 12px;
+      height: 12px;
+      margin-top: 3px;
+      border-radius: 999px;
+      background: #d1d5db;
+      box-shadow: 0 0 0 4px #f3f4f6;
+    }
+
+    .timeline-item.done .timeline-dot {
+      background: var(--green);
+      box-shadow: 0 0 0 4px #dcfce7;
+    }
+
+    .timeline-item.active .timeline-dot {
+      background: var(--red);
+      box-shadow: 0 0 0 4px #fee2e2;
+    }
+
+    .delivery-chat {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 12px;
+    }
+
+    .delivery-chat h3 {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    .delivery-chat-form {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
     }
 
     .checkline {
@@ -1367,6 +1476,31 @@
     </div>
   </div>
 
+  <div id="cancelRouteModal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3>Cancelar rota</h3>
+        <button class="icon-btn" id="closeCancelRoute" type="button">x</button>
+      </div>
+      <form id="cancelRouteForm" class="form">
+        <div class="detail-item">
+          <span>Confirmacao</span>
+          <strong id="cancelRouteTitle">Tem certeza que deseja cancelar esta rota?</strong>
+        </div>
+        <p style="color:var(--muted);font-size:14px;line-height:1.6">
+          Ao confirmar, a rota sera marcada como cancelada para a loja, administracao e aplicativo do motoboy.
+        </p>
+        <label>Motivo do cancelamento
+          <textarea id="cancelRouteReason" placeholder="Opcional: cliente desistiu, endereco errado, pedido duplicado..."></textarea>
+        </label>
+        <div class="delivery-head" style="gap:8px;flex-wrap:wrap">
+          <button class="btn ghost" id="keepRoute" type="button">Manter rota</button>
+          <button class="btn red" type="submit">Sim, cancelar rota</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="newsPopup" class="modal-backdrop hidden">
     <div class="modal-card">
       <div class="modal-head">
@@ -1448,6 +1582,9 @@
     let supportTicketId;
     let supportTickets = [];
     let latestDeliveries = [];
+    let pendingCancelDeliveryId = '';
+    let activeDeliveryChatId = '';
+    let unsubscribeDeliveryChat;
     let latestNews = [];
     let newsSnapshotReady = false;
     let fixedOffers = [];
@@ -1937,6 +2074,52 @@
       return 'Aguardando um motoboy aceitar o pedido.';
     }
 
+    function canCancelDelivery(item) {
+      return item && !['Finalizado', 'Cancelado'].includes(item.status);
+    }
+
+    function canEditDelivery(item) {
+      return item && ['Novo', 'Motoboy solicitado'].includes(item.status) && !item.pickedUpAt;
+    }
+
+    function canConfirmPickup(item) {
+      return item
+        && !item.pickupCodeConfirmedAt
+        && (item.assignedMotoboyId || item.assignedMotoboyUid)
+        && ['Motoboy solicitado', 'Em andamento'].includes(item.status);
+    }
+
+    function deliveryPickupBadge(item) {
+      if (item.status === 'Cancelado') return '<span class="mini-badge danger">Rota cancelada</span>';
+      if (item.status === 'Finalizado') return '<span class="mini-badge ok">Finalizada</span>';
+      if (item.pickupCodeConfirmedAt) return '<span class="mini-badge ok">Codigo conferido</span>';
+      if (item.assignedMotoboyId || item.assignedMotoboyUid) return '<span class="mini-badge warn">Aguardando codigo da loja</span>';
+      return '<span class="mini-badge">Aguardando motoboy</span>';
+    }
+
+    function deliveryTimeline(item) {
+      const events = [
+        ['Pedido criado', item.createdAt, true],
+        ['Motoboy aceitou', item.assignedAt, Boolean(item.assignedAt)],
+        ['Chegou na loja', item.pickupArrivedAt, Boolean(item.pickupArrivedAt)],
+        ['Codigo conferido pela loja', item.pickupCodeConfirmedAt, Boolean(item.pickupCodeConfirmedAt)],
+        ['Pedido coletado', item.pickedUpAt, Boolean(item.pickedUpAt)],
+        ['Chegou no cliente', item.deliveryArrivedAt, Boolean(item.deliveryArrivedAt)],
+        [item.status === 'Cancelado' ? 'Rota cancelada' : 'Rota finalizada', item.canceledAt || item.finishedAt, ['Cancelado', 'Finalizado'].includes(item.status)],
+      ];
+      const firstPending = events.findIndex(([, , done]) => !done);
+      return `
+        <div class="timeline">
+          ${events.map(([label, date, done], index) => `
+            <div class="timeline-item ${done ? 'done' : index === firstPending ? 'active' : ''}">
+              <span class="timeline-dot"></span>
+              <div><strong>${label}</strong><br>${date ? formatDateTime(date) : 'Pendente'}</div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
     function renderDeliveries(items) {
       latestDeliveries = items;
       const open = items.filter((item) => !['Finalizado', 'Cancelado'].includes(item.status));
@@ -1971,10 +2154,15 @@
             ${item.multiStop ? `<p><strong>${item.deliveryCount || item.stops?.length || 1} entregas na mesma rota</strong></p>` : ''}
             <p>${escapeHtml(item.deliveryAddress || '')}${item.deliveryNumber ? ', ' + escapeHtml(item.deliveryNumber) : ''}</p>
             <p style="color:var(--muted);font-size:13px">${escapeHtml(statusMessage(item))}</p>
-            <p style="color:var(--muted);font-size:13px">${currency(item.estimatedPrice || 0)} - ${item.distanceKm || '--'} km</p>
-            <div class="delivery-head" style="gap:8px;flex-wrap:wrap">
+            <div class="delivery-meta">
+              <span class="mini-badge">${currency(item.estimatedPrice || 0)}</span>
+              <span class="mini-badge">${item.distanceKm || '--'} km</span>
+              ${deliveryPickupBadge(item)}
+              ${item.cancelReason ? `<span class="mini-badge danger">Motivo registrado</span>` : ''}
+            </div>
+            <div class="action-row">
               <button class="btn ghost" type="button" data-delivery-detail="${escapeHtml(item.id || item.protocol)}">Detalhes</button>
-              ${!['Finalizado', 'Cancelado'].includes(item.status) ? `<button class="btn secondary" type="button" data-delivery-cancel="${escapeHtml(item.id || item.protocol)}">Cancelar rota</button>` : ''}
+              ${canCancelDelivery(item) ? `<button class="btn secondary" type="button" data-delivery-cancel="${escapeHtml(item.id || item.protocol)}">Cancelar rota</button>` : ''}
             </div>
           </article>
         `).join('')
@@ -2032,13 +2220,18 @@
           <div class="detail-item"><span>Previsao</span><strong>${item.estimatedTime || '--'} min</strong></div>
           <div class="detail-item"><span>Entregas</span><strong>${stops.length}</strong></div>
         </div>
-        ${!['Finalizado', 'Cancelado'].includes(item.status) ? `
-          <div class="delivery-head" style="margin-top:12px;gap:8px;flex-wrap:wrap">
-            <button class="btn ghost" type="button" data-edit-delivery="${escapeHtml(item.id || item.protocol)}">Alterar informacoes do pedido</button>
-            <button class="btn secondary" type="button" data-delivery-cancel="${escapeHtml(item.id || item.protocol)}">Cancelar rota</button>
+        ${deliveryTimeline(item)}
+        <div class="delivery-meta">
+          ${deliveryPickupBadge(item)}
+          ${item.canceledByStoreName ? `<span class="mini-badge danger">Cancelada por ${escapeHtml(item.canceledByStoreName)}</span>` : ''}
+        </div>
+        ${canCancelDelivery(item) || canEditDelivery(item) ? `
+          <div class="action-row">
+            ${canEditDelivery(item) ? `<button class="btn ghost" type="button" data-edit-delivery="${escapeHtml(item.id || item.protocol)}">Alterar informacoes do pedido</button>` : ''}
+            ${canCancelDelivery(item) ? `<button class="btn secondary" type="button" data-delivery-cancel="${escapeHtml(item.id || item.protocol)}">Cancelar rota</button>` : ''}
           </div>
         ` : ''}
-        ${item.assignedMotoboyId || item.assignedMotoboyUid ? `
+        ${canConfirmPickup(item) || item.pickupCodeConfirmedAt ? `
           <form class="detail-item" style="margin-top:12px" data-confirm-pickup="${escapeHtml(item.id || item.protocol)}">
             <span>Conferir codigo de coleta</span>
             <strong>${item.pickupCodeConfirmedAt ? `Codigo conferido em ${formatDateTime(item.pickupCodeConfirmedAt)}` : 'Digite o codigo que aparece no aplicativo do motoboy.'}</strong>
@@ -2057,13 +2250,33 @@
             <strong>${escapeHtml(stop.customerName || '--')} - ${escapeHtml(stop.deliveryAddress || '')}${stop.deliveryNumber ? ', ' + escapeHtml(stop.deliveryNumber) : ''}${stop.deliveryComplement ? ' - ' + escapeHtml(stop.deliveryComplement) : ''}</strong>
           </div>
         `).join('')}
+        ${item.cancelReason ? `<div class="detail-item" style="margin-top:12px"><span>Motivo do cancelamento</span><strong>${escapeHtml(item.cancelReason)}</strong></div>` : ''}
         <div class="detail-item" style="margin-top:12px"><span>Observacoes</span><strong>${escapeHtml(item.notes || 'Sem observacoes')}</strong></div>
+        ${item.assignedMotoboyId || item.assignedMotoboyUid ? `
+          <div class="delivery-chat">
+            <div class="delivery-head">
+              <h3>Chat com motoboy</h3>
+              <span class="mini-badge ${['Finalizado', 'Cancelado'].includes(item.status) ? 'danger' : 'ok'}">${['Finalizado', 'Cancelado'].includes(item.status) ? 'Encerrado' : 'Ativo durante a rota'}</span>
+            </div>
+            <div id="deliveryChatMessages" class="chat-box"><div class="empty">Carregando mensagens...</div></div>
+            ${['Finalizado', 'Cancelado'].includes(item.status) ? '' : `
+              <form id="deliveryChatForm" class="delivery-chat-form">
+                <input id="deliveryChatInput" placeholder="Mensagem para o motoboy" />
+                <button class="btn red" type="submit">Enviar</button>
+              </form>
+            `}
+          </div>
+        ` : ''}
       `;
       $('deliveryDetailModal').classList.remove('hidden');
+      observeDeliveryChat(item);
     }
 
     function closeDeliveryDetails() {
       $('deliveryDetailModal').classList.add('hidden');
+      unsubscribeDeliveryChat?.();
+      unsubscribeDeliveryChat = null;
+      activeDeliveryChatId = '';
     }
 
     async function confirmPickupCode(deliveryId, code) {
@@ -2084,17 +2297,34 @@
       closeDeliveryDetails();
     }
 
-    async function cancelDelivery(deliveryId) {
+    function openCancelRoute(deliveryId) {
       const item = latestDeliveries.find((delivery) => String(delivery.id || delivery.protocol) === String(deliveryId));
       if (!item || ['Finalizado', 'Cancelado'].includes(item.status)) return;
-      if (!confirm(`Cancelar a rota ${item.protocol || item.id}?`)) return;
+      pendingCancelDeliveryId = item.id || item.protocol;
+      $('cancelRouteTitle').textContent = `Cancelar a rota ${item.protocol || item.id}?`;
+      $('cancelRouteReason').value = '';
+      $('cancelRouteModal').classList.remove('hidden');
+    }
+
+    function closeCancelRoute() {
+      pendingCancelDeliveryId = '';
+      $('cancelRouteModal').classList.add('hidden');
+      $('cancelRouteReason').value = '';
+    }
+
+    async function cancelDelivery(deliveryId, reason = '') {
+      const item = latestDeliveries.find((delivery) => String(delivery.id || delivery.protocol) === String(deliveryId));
+      if (!item || ['Finalizado', 'Cancelado'].includes(item.status)) return;
       await updateDoc(doc(db, 'deliveries', item.id || item.protocol), {
         status: 'Cancelado',
         canceledAt: new Date().toISOString(),
         canceledByStore: true,
+        canceledByStoreName: currentStore?.storeName || '',
+        cancelReason: String(reason || '').trim(),
         updatedAt: new Date().toISOString(),
       });
       showToast('Rota cancelada. A administracao e o motoboy serao atualizados.');
+      closeCancelRoute();
     }
 
     async function editDeliveryBasic(deliveryId) {
@@ -2120,6 +2350,54 @@
       });
       showToast('Informacoes do pedido atualizadas para a loja, administracao e aplicativo.');
       closeDeliveryDetails();
+    }
+
+    function renderDeliveryChatMessages(items) {
+      const box = $('deliveryChatMessages');
+      if (!box) return;
+      box.innerHTML = items.length
+        ? items.map((message) => `
+          <div class="chat-message ${message.sender === 'store' ? 'admin' : ''}">
+            <small>${message.sender === 'store' ? escapeHtml(currentStore?.storeName || 'Loja') : escapeHtml(message.senderName || 'Motoboy')}</small>
+            <div>${escapeHtml(message.text || '')}</div>
+          </div>
+        `).join('')
+        : '<div class="empty">Nenhuma mensagem ainda.</div>';
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function observeDeliveryChat(item) {
+      unsubscribeDeliveryChat?.();
+      activeDeliveryChatId = item?.id || item?.protocol || '';
+      if (!activeDeliveryChatId || !(item.assignedMotoboyId || item.assignedMotoboyUid)) return;
+      const q = query(collection(db, 'deliveries', activeDeliveryChatId, 'messages'));
+      unsubscribeDeliveryChat = onSnapshot(q, (snapshot) => {
+        const items = snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }))
+          .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+        renderDeliveryChatMessages(items);
+      }, () => renderDeliveryChatMessages([]));
+    }
+
+    async function sendDeliveryChatMessage(text) {
+      const item = latestDeliveries.find((delivery) => String(delivery.id || delivery.protocol) === String(activeDeliveryChatId));
+      const clean = String(text || '').trim();
+      if (!item || !clean || ['Finalizado', 'Cancelado'].includes(item.status)) return;
+      const now = new Date().toISOString();
+      const messageId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      await setDoc(doc(db, 'deliveries', activeDeliveryChatId, 'messages', messageId), {
+        id: messageId,
+        text: clean,
+        sender: 'store',
+        senderName: currentStore?.storeName || 'Loja',
+        senderUid: currentStore?.ownerUid || '',
+        createdAt: now,
+      });
+      await updateDoc(doc(db, 'deliveries', activeDeliveryChatId), {
+        lastRouteMessage: clean,
+        lastRouteMessageAt: now,
+        lastRouteMessageSender: 'store',
+        updatedAt: now,
+      });
     }
 
     function renderSupportMessages(items) {
@@ -2461,22 +2739,42 @@
       const detailButton = event.target.closest('[data-delivery-detail]');
       if (detailButton) openDeliveryDetails(detailButton.dataset.deliveryDetail);
       const cancelButton = event.target.closest('[data-delivery-cancel]');
-      if (cancelButton) cancelDelivery(cancelButton.dataset.deliveryCancel).catch((error) => showError(error.message || 'Nao foi possivel cancelar a rota.'));
+      if (cancelButton) openCancelRoute(cancelButton.dataset.deliveryCancel);
     });
     $('closeDeliveryDetail').addEventListener('click', closeDeliveryDetails);
     $('deliveryDetailModal').addEventListener('click', (event) => {
       if (event.target.id === 'deliveryDetailModal') closeDeliveryDetails();
       const cancelButton = event.target.closest('[data-delivery-cancel]');
-      if (cancelButton) cancelDelivery(cancelButton.dataset.deliveryCancel).catch((error) => showError(error.message || 'Nao foi possivel cancelar a rota.'));
+      if (cancelButton) openCancelRoute(cancelButton.dataset.deliveryCancel);
       const editButton = event.target.closest('[data-edit-delivery]');
       if (editButton) editDeliveryBasic(editButton.dataset.editDelivery).catch((error) => showError(error.message || 'Nao foi possivel editar o pedido.'));
     });
     $('deliveryDetailModal').addEventListener('submit', (event) => {
       const form = event.target.closest('[data-confirm-pickup]');
-      if (!form) return;
+      if (form) {
+        event.preventDefault();
+        confirmPickupCode(form.dataset.confirmPickup, form.elements.pickupCodeCheck?.value || '')
+          .catch((error) => showError(error.message || 'Nao foi possivel conferir o codigo.'));
+        return;
+      }
+      if (event.target.id === 'deliveryChatForm') {
+        event.preventDefault();
+        const input = $('deliveryChatInput');
+        sendDeliveryChatMessage(input.value)
+          .then(() => { input.value = ''; })
+          .catch((error) => showError(error.message || 'Nao foi possivel enviar a mensagem.'));
+      }
+    });
+    $('closeCancelRoute').addEventListener('click', closeCancelRoute);
+    $('keepRoute').addEventListener('click', closeCancelRoute);
+    $('cancelRouteModal').addEventListener('click', (event) => {
+      if (event.target.id === 'cancelRouteModal') closeCancelRoute();
+    });
+    $('cancelRouteForm').addEventListener('submit', (event) => {
       event.preventDefault();
-      confirmPickupCode(form.dataset.confirmPickup, form.elements.pickupCodeCheck?.value || '')
-        .catch((error) => showError(error.message || 'Nao foi possivel conferir o codigo.'));
+      if (!pendingCancelDeliveryId) return;
+      cancelDelivery(pendingCancelDeliveryId, $('cancelRouteReason').value)
+        .catch((error) => showError(error.message || 'Nao foi possivel cancelar a rota.'));
     });
     $('closeNewsPopup').addEventListener('click', () => $('newsPopup').classList.add('hidden'));
     $('newsPopup').addEventListener('click', (event) => {
