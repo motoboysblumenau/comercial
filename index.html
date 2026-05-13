@@ -514,6 +514,38 @@
       gap: 12px;
     }
 
+    .checkline {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .checkline input {
+      width: auto;
+      margin-top: 3px;
+      accent-color: var(--red);
+    }
+
+    .extra-stops {
+      display: grid;
+      gap: 10px;
+    }
+
+    .stop-card {
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fff;
+    }
+
+    .stop-card h3 {
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+
     .compact-ticket {
       display: grid;
       gap: 8px;
@@ -1119,10 +1151,14 @@
                 <label>Cliente / destinatario*
                   <input id="customerName" required />
                 </label>
-                <label>WhatsApp do cliente*
-                  <input id="customerPhone" required />
+                <label>WhatsApp do cliente
+                  <input id="customerPhone" placeholder="Opcional" />
                 </label>
               </div>
+              <label class="checkline">
+                <input id="customerWhatsappOptIn" type="checkbox" />
+                <span>Enviar notificacoes sobre o status do pedido para o cliente</span>
+              </label>
               <div class="row">
                 <label>Endereco de entrega*
                   <input id="deliveryAddress" list="streetSuggestions" required placeholder="Digite a rua em Blumenau" />
@@ -1135,9 +1171,14 @@
               <label>Complemento do destino
                 <input id="deliveryComplement" placeholder="Apartamento, sala, referencia" />
               </label>
+              <label>Codigo de coleta
+                <input id="pickupCode" maxlength="12" placeholder="Opcional: codigo que o motoboy deve confirmar" />
+              </label>
               <label>Observacoes para o motoboy
                 <textarea id="deliveryNotes" placeholder="Ex: retirar no balcao, levar maquina, cuidado com pacote"></textarea>
               </label>
+              <div id="extraStops" class="extra-stops"></div>
+              <button class="btn ghost" id="addStop" type="button">Adicionar outra entrega na rota</button>
               <div class="estimate-box hidden" id="estimateBox">
                 <div><strong id="estimateDistance">--</strong><span>Distancia</span></div>
                 <div><strong id="estimateTime">--</strong><span>Tempo</span></div>
@@ -1400,6 +1441,7 @@
     let courierLayerFull;
     let currentStore;
     let currentEstimate;
+    let extraStopCount = 0;
     let supportTicketId;
     let supportTickets = [];
     let latestDeliveries = [];
@@ -1543,6 +1585,75 @@
           gasolinePrice,
         },
       };
+    }
+
+    function buildStopFromForm(index = 0, estimate = {}) {
+      const suffix = index ? String(index) : '';
+      const customerName = formValue(index ? `customerName${suffix}` : 'customerName');
+      const address = formValue(index ? `deliveryAddress${suffix}` : 'deliveryAddress');
+      const number = formValue(index ? `deliveryNumber${suffix}` : 'deliveryNumber');
+      const complement = formValue(index ? `deliveryComplement${suffix}` : 'deliveryComplement');
+      const pickupCode = formValue(index ? `pickupCode${suffix}` : 'pickupCode');
+      const phoneValue = index ? formValue(`customerPhone${suffix}`) : formValue('customerPhone');
+      return {
+        stopIndex: index + 1,
+        customerName,
+        phone: phoneValue,
+        deliveryAddress: address,
+        deliveryNumber: number,
+        deliveryComplement: complement,
+        pickupCode,
+        deliveryLocation: estimate.destinationLocation || null,
+        distanceKm: estimate.distanceKm || 0,
+        estimatedTime: estimate.estimatedTime || 0,
+        estimatedPrice: estimate.estimatedPrice || 0,
+      };
+    }
+
+    function getStopInputs() {
+      return [0, ...Array.from({ length: extraStopCount }, (_, index) => index + 1)];
+    }
+
+    function renderExtraStops() {
+      $('extraStops').innerHTML = Array.from({ length: extraStopCount }, (_, index) => {
+        const number = index + 1;
+        return `
+          <div class="stop-card" data-stop-card="${number}">
+            <div class="delivery-head">
+              <h3>Entrega adicional ${number + 1}</h3>
+              <button class="btn ghost" type="button" data-remove-stop="${number}">Remover</button>
+            </div>
+            <div class="row">
+              <label>Cliente / destinatario*
+                <input id="customerName${number}" required />
+              </label>
+              <label>WhatsApp do cliente
+                <input id="customerPhone${number}" placeholder="Opcional" />
+              </label>
+            </div>
+            <div class="row">
+              <label>Endereco de entrega*
+                <input id="deliveryAddress${number}" list="streetSuggestions" required placeholder="Digite a rua em Blumenau" />
+              </label>
+              <label>Numero*
+                <input id="deliveryNumber${number}" required />
+              </label>
+            </div>
+            <label>Complemento do destino
+              <input id="deliveryComplement${number}" placeholder="Apartamento, sala, referencia" />
+            </label>
+            <label>Codigo de coleta
+              <input id="pickupCode${number}" maxlength="12" placeholder="Opcional" />
+            </label>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function resetDeliveryEstimate() {
+      currentEstimate = null;
+      $('estimateBox').classList.add('hidden');
+      $('requestDelivery').disabled = true;
     }
 
     async function geocodeAddress(address, number = '') {
@@ -1832,6 +1943,7 @@
               <strong>Pedido ${escapeHtml(item.protocol || item.id)}</strong>
               <span class="status ${item.status || 'Novo'}">${item.status || 'Novo'}</span>
             </div>
+            ${item.multiStop ? `<p><strong>${item.deliveryCount || item.stops?.length || 1} entregas na mesma rota</strong></p>` : ''}
             <p>${escapeHtml(item.deliveryAddress || '')}${item.deliveryNumber ? ', ' + escapeHtml(item.deliveryNumber) : ''}</p>
             <p style="color:var(--muted);font-size:13px">${escapeHtml(statusMessage(item))}</p>
             <p style="color:var(--muted);font-size:13px">${currency(item.estimatedPrice || 0)} - ${item.distanceKm || '--'} km</p>
@@ -1868,6 +1980,14 @@
     function openDeliveryDetails(id) {
       const item = latestDeliveries.find((delivery) => String(delivery.id || delivery.protocol) === String(id));
       if (!item) return;
+      const stops = Array.isArray(item.stops) && item.stops.length ? item.stops : [{
+        customerName: item.customerName,
+        phone: item.phone,
+        deliveryAddress: item.deliveryAddress,
+        deliveryNumber: item.deliveryNumber,
+        deliveryComplement: item.deliveryComplement,
+        pickupCode: item.pickupCode,
+      }];
       $('deliveryDetailContent').innerHTML = `
         <div class="detail-grid">
           <div class="detail-item"><span>Pedido</span><strong>${escapeHtml(item.protocol || item.id)}</strong></div>
@@ -1882,9 +2002,15 @@
           <div class="detail-item"><span>Cliente</span><strong>${escapeHtml(item.customerName || '--')}</strong></div>
           <div class="detail-item"><span>Telefone</span><strong>${escapeHtml(item.phone || '--')}</strong></div>
           <div class="detail-item"><span>Previsao</span><strong>${item.estimatedTime || '--'} min</strong></div>
+          <div class="detail-item"><span>Entregas</span><strong>${stops.length}</strong></div>
         </div>
         <div class="detail-item" style="margin-top:12px"><span>Retirada</span><strong>${escapeHtml(item.pickupAddress || '')}${item.pickupComplement ? ' - ' + escapeHtml(item.pickupComplement) : ''}</strong></div>
-        <div class="detail-item" style="margin-top:12px"><span>Entrega</span><strong>${escapeHtml(item.deliveryAddress || '')}${item.deliveryNumber ? ', ' + escapeHtml(item.deliveryNumber) : ''}${item.deliveryComplement ? ' - ' + escapeHtml(item.deliveryComplement) : ''}</strong></div>
+        ${stops.map((stop, index) => `
+          <div class="detail-item" style="margin-top:12px">
+            <span>Entrega ${index + 1}${stop.pickupCode ? ' - codigo ' + escapeHtml(stop.pickupCode) : ''}</span>
+            <strong>${escapeHtml(stop.customerName || '--')} - ${escapeHtml(stop.deliveryAddress || '')}${stop.deliveryNumber ? ', ' + escapeHtml(stop.deliveryNumber) : ''}${stop.deliveryComplement ? ' - ' + escapeHtml(stop.deliveryComplement) : ''}</strong>
+          </div>
+        `).join('')}
         <div class="detail-item" style="margin-top:12px"><span>Observacoes</span><strong>${escapeHtml(item.notes || 'Sem observacoes')}</strong></div>
       `;
       $('deliveryDetailModal').classList.remove('hidden');
@@ -2208,6 +2334,26 @@
       const button = event.target.closest('[data-remove-range]');
       if (button) button.closest('.route-range-row')?.remove();
     });
+    $('addStop').addEventListener('click', () => {
+      if (extraStopCount >= 3) {
+        showError('Voce pode solicitar ate 4 entregas na mesma rota.');
+        return;
+      }
+      extraStopCount += 1;
+      renderExtraStops();
+      resetDeliveryEstimate();
+    });
+    $('extraStops').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-remove-stop]');
+      if (!button) return;
+      extraStopCount = Math.max(0, extraStopCount - 1);
+      renderExtraStops();
+      resetDeliveryEstimate();
+    });
+    $('deliveryForm').addEventListener('input', (event) => {
+      if (event.target.closest('#estimateBox')) return;
+      resetDeliveryEstimate();
+    });
     $('cep').addEventListener('blur', fillAddressByCep);
     $('deliveryList').addEventListener('click', (event) => {
       const button = event.target.closest('[data-delivery-detail]');
@@ -2298,38 +2444,65 @@
       const button = $('calculateDelivery');
       setLoading(button, true, 'Calculando...');
       try {
-        const destination = await geocodeAddress(formValue('deliveryAddress'), formValue('deliveryNumber'));
-        if (!destination) {
-          const distance = calculateDistanceKm(currentStore?.location, currentStore?.location);
-          currentEstimate = {
-            ...estimateDelivery(distance || 1.8),
-            destinationLocation: null,
-            routeProvider: 'Endereco sem coordenada precisa',
-          };
-          $('estimateDistance').textContent = `${currentEstimate.distanceKm} km`;
-          $('estimateTime').textContent = `${currentEstimate.estimatedTime} min`;
-          $('estimatePrice').textContent = currency(currentEstimate.estimatedPrice);
-          $('estimateBox').classList.remove('hidden');
-          $('requestDelivery').disabled = false;
-          showError('Nao consegui localizar o ponto exato, mas liberei uma estimativa minima. Confira o endereco antes de solicitar.');
-          return;
-        }
         const origin = currentStore?.location;
-        const route = await calculateRoadRoute(origin, destination);
-        const distanceKm = route?.distanceKm || calculateDistanceKm(origin, destination);
-        const estimate = estimateDelivery(distanceKm);
+        const indexes = getStopInputs();
+        const rawStops = [];
+        for (const index of indexes) {
+          const suffix = index ? String(index) : '';
+          const address = formValue(index ? `deliveryAddress${suffix}` : 'deliveryAddress');
+          const number = formValue(index ? `deliveryNumber${suffix}` : 'deliveryNumber');
+          const customerName = formValue(index ? `customerName${suffix}` : 'customerName');
+          if (!address || !number || !customerName) {
+            showError('Preencha cliente, endereco e numero de todas as entregas antes de calcular.');
+            return;
+          }
+          const destination = await geocodeAddress(address, number);
+          const fallbackDistance = calculateDistanceKm(origin, destination || origin);
+          const estimate = estimateDelivery(fallbackDistance || 1.8);
+          rawStops.push({
+            formIndex: index,
+            destination,
+            distanceFromStore: fallbackDistance || 1.8,
+            ...buildStopFromForm(index, {
+              ...estimate,
+              destinationLocation: destination ? { lat: destination.lat, lng: destination.lng } : null,
+            }),
+          });
+        }
+        const orderedStops = rawStops.sort((a, b) => a.distanceFromStore - b.distanceFromStore)
+          .map((stop, index) => ({ ...stop, stopIndex: index + 1 }));
+        let previousPoint = origin;
+        let totalDistance = 0;
+        let routeProvider = 'OpenStreetMap aproximado';
+        for (const stop of orderedStops) {
+          if (!stop.destination) {
+            totalDistance += stop.distanceFromStore || 1.8;
+            routeProvider = 'Alguns enderecos sem coordenada precisa';
+            previousPoint = previousPoint || origin;
+            continue;
+          }
+          const route = await calculateRoadRoute(previousPoint, stop.destination);
+          totalDistance += route?.distanceKm || calculateDistanceKm(previousPoint, stop.destination);
+          previousPoint = stop.destination;
+        }
+        const estimate = estimateDelivery(totalDistance || 1.8);
         currentEstimate = {
           ...estimate,
-          destinationLocation: { lat: destination.lat, lng: destination.lng },
-          routeProvider: route?.provider || 'OpenStreetMap aproximado',
-          routeDurationMinutes: route?.durationMinutes || estimate.estimatedTime,
+          destinationLocation: orderedStops[0]?.deliveryLocation || null,
+          routeProvider,
+          multiStop: orderedStops.length > 1,
+          deliveryCount: orderedStops.length,
+          stops: orderedStops.map((stop) => {
+            const { destination, distanceFromStore, formIndex, ...payload } = stop;
+            return payload;
+          }),
         };
-        if (route?.durationMinutes) currentEstimate.estimatedTime = Math.max(8, Math.ceil(route.durationMinutes + 4));
         $('estimateDistance').textContent = `${currentEstimate.distanceKm} km`;
         $('estimateTime').textContent = `${currentEstimate.estimatedTime} min`;
         $('estimatePrice').textContent = currency(currentEstimate.estimatedPrice);
         $('estimateBox').classList.remove('hidden');
         $('requestDelivery').disabled = false;
+        if (orderedStops.length > 1) showError(`Rota com ${orderedStops.length} entregas ordenada da mais proxima para a mais distante.`);
       } finally {
         setLoading(button, false);
       }
@@ -2419,22 +2592,34 @@
       try {
         const protocol = createProtocol();
         const now = new Date().toISOString();
+        const stops = Array.isArray(currentEstimate.stops) && currentEstimate.stops.length
+          ? currentEstimate.stops
+          : [buildStopFromForm(0, currentEstimate)];
+        const firstStop = stops[0] || {};
+        const notifyCustomer = $('customerWhatsappOptIn').checked && Boolean(String(firstStop.phone || formValue('customerPhone')).replace(/\D/g, ''));
         await setDoc(doc(db, 'deliveries', protocol), {
           id: protocol,
           protocol,
           createdByUid: currentStore.ownerUid,
           storeId: currentStore.ownerUid,
           storeName: currentStore.storeName,
-          customerName: formValue('customerName'),
-          phone: formValue('customerPhone'),
+          customerName: firstStop.customerName || formValue('customerName'),
+          phone: firstStop.phone || formValue('customerPhone') || '',
+          whatsappUpdatesOptIn: notifyCustomer,
+          allowWhatsappUpdates: notifyCustomer,
           pickupAddress: formatStoreAddress(currentStore),
           pickupNumber: currentStore.address?.number || '',
           pickupComplement: currentStore.address?.complement || '',
           pickupLocation: currentStore.location,
-          deliveryAddress: formValue('deliveryAddress'),
-          deliveryNumber: formValue('deliveryNumber'),
-          deliveryComplement: formValue('deliveryComplement'),
+          deliveryAddress: firstStop.deliveryAddress || formValue('deliveryAddress'),
+          deliveryNumber: firstStop.deliveryNumber || formValue('deliveryNumber'),
+          deliveryComplement: firstStop.deliveryComplement || formValue('deliveryComplement'),
           deliveryLocation: currentEstimate.destinationLocation,
+          pickupCode: firstStop.pickupCode || formValue('pickupCode') || '',
+          pickupCodeRequired: Boolean(firstStop.pickupCode || formValue('pickupCode')),
+          stops,
+          deliveryCount: stops.length,
+          multiStop: stops.length > 1,
           notes: formValue('deliveryNotes'),
           deliveryType: 'Empresarial',
           packageSize: currentStore.productType || 'Objetos',
@@ -2448,6 +2633,8 @@
           updatedAt: now,
         });
         $('deliveryForm').reset();
+        extraStopCount = 0;
+        renderExtraStops();
         currentEstimate = null;
         $('estimateBox').classList.add('hidden');
         $('requestDelivery').disabled = true;
