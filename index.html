@@ -1726,6 +1726,9 @@
     let supportTicketId;
     let supportTickets = [];
     let latestDeliveries = [];
+    let deliveryStatusMemory = {};
+    let deliveryStatusMemoryReady = false;
+    let searchPromptTimer;
     let pendingCancelDeliveryId = '';
     let activeDeliveryChatId = '';
     let unsubscribeDeliveryChat;
@@ -1762,6 +1765,71 @@
       box.classList.add('success');
       box.classList.toggle('show', Boolean(message));
       setTimeout(() => showError(''), 4200);
+    }
+
+    function deliveryKey(item) {
+      return String(item?.id || item?.protocol || '');
+    }
+
+    function openPortalPopup(title, contentHtml) {
+      $('newsPopupTitle').textContent = title || 'Aviso';
+      $('newsPopupContent').innerHTML = contentHtml;
+      $('newsPopup').classList.remove('hidden');
+    }
+
+    function notifyAcceptedDeliveries(items) {
+      const nextMemory = {};
+      items.forEach((item) => {
+        const key = deliveryKey(item);
+        if (!key) return;
+        const accepted = item.status === 'Motoboy solicitado' || Boolean(item.assignedMotoboyId || item.assignedMotoboyUid);
+        const previous = deliveryStatusMemory[key];
+        if (deliveryStatusMemoryReady && accepted && previous && !previous.accepted) {
+          openPortalPopup('Motoboy aceitou o pedido', `
+            <p><strong>Pedido ${escapeHtml(item.protocol || item.id)}</strong></p>
+            <p>${escapeHtml(item.assignedMotoboyName || 'Um motoboy')} aceitou a rota e esta a caminho da loja.</p>
+            <button class="btn red" type="button" id="openAcceptedDelivery" data-delivery-detail="${escapeHtml(key)}">Ver detalhes</button>
+          `);
+        }
+        nextMemory[key] = { status: item.status || 'Novo', accepted };
+      });
+      deliveryStatusMemory = nextMemory;
+      deliveryStatusMemoryReady = true;
+    }
+
+    function searchPromptStorageKey(item) {
+      return `mb_store_search_prompt_${deliveryKey(item)}`;
+    }
+
+    function findDeliveryNeedingSearchPrompt(items) {
+      const now = Date.now();
+      return items.find((item) => {
+        if ((item.status || 'Novo') !== 'Novo') return false;
+        if (item.assignedMotoboyId || item.assignedMotoboyUid) return false;
+        const createdAt = new Date(item.createdAt || 0).getTime();
+        if (!createdAt || now - createdAt < 10 * 60 * 1000) return false;
+        const lastPrompt = Number(localStorage.getItem(searchPromptStorageKey(item)) || 0);
+        return !lastPrompt || now - lastPrompt >= 10 * 60 * 1000;
+      });
+    }
+
+    function openSearchContinuationPrompt(item) {
+      const key = deliveryKey(item);
+      localStorage.setItem(searchPromptStorageKey(item), String(Date.now()));
+      openPortalPopup('Ainda procurando motoboy', `
+        <p><strong>Pedido ${escapeHtml(item.protocol || item.id)}</strong></p>
+        <p>Estamos procurando motoboy ha mais de 10 minutos. Deseja continuar a busca por esta rota?</p>
+        <div class="action-row" style="margin-top:14px">
+          <button class="btn red" type="button" data-continue-search="${escapeHtml(key)}">Continuar procurando</button>
+          <button class="btn secondary" type="button" data-cancel-search="${escapeHtml(key)}">Cancelar pedido</button>
+        </div>
+      `);
+    }
+
+    function checkSearchContinuationPrompt() {
+      if (!$('newsPopup').classList.contains('hidden')) return;
+      const item = findDeliveryNeedingSearchPrompt(latestDeliveries);
+      if (item) openSearchContinuationPrompt(item);
     }
 
     function setLoading(button, loading, text) {
@@ -2387,6 +2455,7 @@
     }
 
     function renderDeliveries(items) {
+      notifyAcceptedDeliveries(items);
       latestDeliveries = items;
       const open = items.filter((item) => !['Finalizado', 'Cancelado'].includes(item.status));
       const finished = items.filter((item) => item.status === 'Finalizado');
@@ -2434,6 +2503,7 @@
         `).join('')
         : '<div class="empty">Nenhum pedido criado ainda.</div>';
       renderCourierMap(open);
+      checkSearchContinuationPrompt();
     }
 
     function renderPerformanceCharts(data) {
@@ -2926,12 +2996,14 @@
 
     function observeStoreDeliveries(uid) {
       unsubscribeDeliveries?.();
+      clearInterval(searchPromptTimer);
       const q = query(collection(db, 'deliveries'), where('createdByUid', '==', uid));
       unsubscribeDeliveries = onSnapshot(q, (snapshot) => {
         const items = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))
           .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
         renderDeliveries(items);
       }, () => renderDeliveries([]));
+      searchPromptTimer = setInterval(checkSearchContinuationPrompt, 60 * 1000);
     }
 
     async function createOrUpdateStoreSupport(reason, text, options = {}) {
@@ -3097,6 +3169,23 @@
       if (event.target.id === 'openNewsFromToast') {
         $('newsPopup').classList.add('hidden');
         showDashboardSection('noticias');
+      }
+      const continueButton = event.target.closest('[data-continue-search]');
+      if (continueButton) {
+        localStorage.setItem(`mb_store_search_prompt_${continueButton.dataset.continueSearch}`, String(Date.now()));
+        $('newsPopup').classList.add('hidden');
+        showToast('Busca mantida. Vamos perguntar novamente em 10 minutos se ninguem aceitar.');
+      }
+      const cancelSearchButton = event.target.closest('[data-cancel-search]');
+      if (cancelSearchButton) {
+        $('newsPopup').classList.add('hidden');
+        cancelDelivery(cancelSearchButton.dataset.cancelSearch, 'Loja cancelou apos espera por motoboy.')
+          .catch((error) => showError(error.message || 'Nao foi possivel cancelar a rota.'));
+      }
+      const acceptedButton = event.target.closest('#openAcceptedDelivery');
+      if (acceptedButton) {
+        $('newsPopup').classList.add('hidden');
+        openDeliveryDetails(acceptedButton.dataset.deliveryDetail);
       }
     });
     $('closeTour').addEventListener('click', closeTourPopover);
