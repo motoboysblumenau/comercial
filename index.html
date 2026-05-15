@@ -1403,6 +1403,34 @@
               <label>Observacoes para o motoboy
                 <textarea id="deliveryNotes" placeholder="Ex: retirar no balcao, levar maquina, cuidado com pacote"></textarea>
               </label>
+              <div class="notice">
+                <label class="checkline">
+                  <input id="requiresReturnToStore" type="checkbox" />
+                  <span>Esta rota precisa de retorno a loja (maquininha, troco, documento ou embalagem)</span>
+                </label>
+                <div id="returnToStoreFields" class="hidden" style="margin-top:12px">
+                  <div class="row">
+                    <label>Valor para cobrar na maquininha
+                      <input id="collectionAmount" inputmode="decimal" placeholder="Ex: 89,90" />
+                    </label>
+                    <label>Motivo do retorno
+                      <select id="returnReason">
+                        <option value="maquininha">Devolver maquininha</option>
+                        <option value="troco">Devolver troco</option>
+                        <option value="documento">Retornar documento/objeto</option>
+                        <option value="outro">Outro retorno combinado</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="notice warn" style="margin-top:10px">
+                    O valor da rota sera recalculado considerando ida ate o cliente e volta para a loja.
+                  </div>
+                </div>
+                <label class="checkline" style="margin-top:12px">
+                  <input id="returnIfCustomerAbsent" type="checkbox" />
+                  <span>Se o cliente nao estiver em casa, retornar o pedido/pacote para a loja. Se nao marcar, o motoboy podera descartar conforme orientacao do estabelecimento.</span>
+                </label>
+              </div>
               <div id="extraStops" class="extra-stops"></div>
               <button class="btn ghost" id="addStop" type="button">Adicionar outra entrega na rota</button>
               <div class="estimate-box hidden" id="estimateBox">
@@ -2457,6 +2485,8 @@
           <div class="detail-item"><span>Telefone</span><strong>${escapeHtml(item.phone || '--')}</strong></div>
           <div class="detail-item"><span>Previsao</span><strong>${item.estimatedTime || '--'} min</strong></div>
           <div class="detail-item"><span>Entregas</span><strong>${stops.length}</strong></div>
+          <div class="detail-item"><span>Retorno a loja</span><strong>${item.returnToStoreActive || item.requiresReturnToStore ? 'Sim' : 'Nao'}</strong></div>
+          <div class="detail-item"><span>Valor a cobrar</span><strong>${item.collectionAmount ? currency(item.collectionAmount) : '--'}</strong></div>
         </div>
         ${deliveryTimeline(item)}
         <div class="delivery-meta">
@@ -2466,6 +2496,7 @@
         ${canCancelDelivery(item) || canEditDelivery(item) ? `
           <div class="action-row">
             ${canEditDelivery(item) ? `<button class="btn ghost" type="button" data-edit-delivery="${escapeHtml(item.id || item.protocol)}">Alterar informacoes do pedido</button>` : ''}
+            ${canEditDelivery(item) ? `<button class="btn ghost" type="button" data-toggle-return="${escapeHtml(item.id || item.protocol)}">${item.returnToStoreActive || item.requiresReturnToStore ? 'Remover retorno a loja' : 'Adicionar retorno a loja'}</button>` : ''}
             ${canCancelDelivery(item) ? `<button class="btn secondary" type="button" data-delivery-cancel="${escapeHtml(item.id || item.protocol)}">Cancelar rota</button>` : ''}
           </div>
         ` : ''}
@@ -2490,6 +2521,12 @@
         `).join('')}
         ${item.cancelReason ? `<div class="detail-item" style="margin-top:12px"><span>Motivo do cancelamento</span><strong>${escapeHtml(item.cancelReason)}</strong></div>` : ''}
         <div class="detail-item" style="margin-top:12px"><span>Observacoes</span><strong>${escapeHtml(item.notes || 'Sem observacoes')}</strong></div>
+        ${(item.returnToStoreActive || item.requiresReturnToStore || item.returnIfCustomerAbsent) ? `
+          <div class="detail-item" style="margin-top:12px">
+            <span>Orientacao de retorno</span>
+            <strong>${escapeHtml(item.collectionInstruction || (item.returnToStoreActive || item.requiresReturnToStore ? 'Motoboy deve retornar a loja apos a entrega.' : item.absentCustomerInstruction || ''))}</strong>
+          </div>
+        ` : ''}
         ${item.assignedMotoboyId || item.assignedMotoboyUid ? `
           <div class="delivery-chat">
             <div class="delivery-head">
@@ -2587,6 +2624,40 @@
         updatedAt: new Date().toISOString(),
       });
       showToast('Informacoes do pedido atualizadas para a loja, administracao e aplicativo.');
+      closeDeliveryDetails();
+    }
+
+    async function toggleDeliveryReturn(deliveryId) {
+      const item = latestDeliveries.find((delivery) => String(delivery.id || delivery.protocol) === String(deliveryId));
+      if (!item || ['Finalizado', 'Cancelado'].includes(item.status)) return;
+      const active = Boolean(item.returnToStoreActive || item.requiresReturnToStore);
+      const firstConfirm = active
+        ? confirm('Remover retorno a loja desta rota? O motoboy sera avisado que nao precisa voltar ao estabelecimento.')
+        : confirm('Adicionar retorno a loja nesta rota? O valor da rota deve considerar a volta e o motoboy sera avisado no aplicativo.');
+      if (!firstConfirm) return;
+      const secondConfirm = confirm('Confirmacao final: esta alteracao muda a obrigacao operacional da rota. Deseja continuar?');
+      if (!secondConfirm) return;
+      let collectionAmount = Number(item.collectionAmount || 0);
+      let returnReason = item.returnReason || 'maquininha';
+      if (!active) {
+        const amountText = prompt('Valor para o motoboy cobrar na maquininha (opcional):', collectionAmount ? String(collectionAmount).replace('.', ',') : '');
+        if (amountText === null) return;
+        collectionAmount = moneyToNumber(amountText);
+        const reasonText = prompt('Motivo do retorno (maquininha, troco, documento ou outro):', returnReason);
+        if (reasonText === null) return;
+        returnReason = reasonText.trim() || 'maquininha';
+      }
+      await updateDoc(doc(db, 'deliveries', item.id || item.protocol), {
+        requiresReturnToStore: !active,
+        returnToStoreActive: !active,
+        returnReason: !active ? returnReason : '',
+        collectionAmount: !active ? collectionAmount : 0,
+        collectionInstruction: !active
+          ? `Cobrar ${currency(collectionAmount)} na maquininha e retornar a loja.`
+          : '',
+        updatedAt: new Date().toISOString(),
+      });
+      showToast(!active ? 'Retorno a loja adicionado e enviado ao aplicativo.' : 'Retorno a loja removido desta rota.');
       closeDeliveryDetails();
     }
 
@@ -2941,6 +3012,10 @@
       $('fixedValueWrap').classList.toggle('hidden', perDelivery);
       $('routeValueWrap').classList.toggle('hidden', !perDelivery);
     });
+    $('requiresReturnToStore').addEventListener('change', () => {
+      $('returnToStoreFields').classList.toggle('hidden', !$('requiresReturnToStore').checked);
+      resetDeliveryEstimate();
+    });
     $('addRouteRange').addEventListener('click', () => {
       const rows = Array.from(document.querySelectorAll('.route-range-row'));
       const lastTo = rows.length
@@ -2986,6 +3061,8 @@
       if (cancelButton) openCancelRoute(cancelButton.dataset.deliveryCancel);
       const editButton = event.target.closest('[data-edit-delivery]');
       if (editButton) editDeliveryBasic(editButton.dataset.editDelivery).catch((error) => showError(error.message || 'Nao foi possivel editar o pedido.'));
+      const returnButton = event.target.closest('[data-toggle-return]');
+      if (returnButton) toggleDeliveryReturn(returnButton.dataset.toggleReturn).catch((error) => showError(error.message || 'Nao foi possivel alterar o retorno.'));
     });
     $('deliveryDetailModal').addEventListener('submit', (event) => {
       const form = event.target.closest('[data-confirm-pickup]');
@@ -3135,6 +3212,11 @@
           totalDistance += route?.distanceKm || calculateDistanceKm(previousPoint, stop.destination);
           previousPoint = stop.destination;
         }
+        const requiresReturnToStore = $('requiresReturnToStore').checked;
+        if (requiresReturnToStore && previousPoint && origin) {
+          const returnRoute = await calculateRoadRoute(previousPoint, origin);
+          totalDistance += returnRoute?.distanceKm || calculateDistanceKm(previousPoint, origin);
+        }
         const estimate = estimateDelivery(totalDistance || 1.8);
         currentEstimate = {
           ...estimate,
@@ -3142,6 +3224,8 @@
           routeProvider,
           multiStop: orderedStops.length > 1,
           deliveryCount: orderedStops.length,
+          requiresReturnToStore,
+          returnDistanceIncluded: requiresReturnToStore,
           stops: orderedStops.map((stop) => {
             const { destination, distanceFromStore, formIndex, ...payload } = stop;
             return payload;
@@ -3153,6 +3237,7 @@
         $('estimateBox').classList.remove('hidden');
         $('requestDelivery').disabled = false;
         if (orderedStops.length > 1) showError(`Rota com ${orderedStops.length} entregas ordenada da mais proxima para a mais distante.`);
+        if (requiresReturnToStore) showToast('Valor recalculado com retorno para a loja incluso.');
       } finally {
         setLoading(button, false);
       }
@@ -3279,11 +3364,23 @@
           estimatedPrice: currentEstimate.estimatedPrice,
           pricingBreakdown: currentEstimate.pricingBreakdown,
           routeProvider: currentEstimate.routeProvider,
+          requiresReturnToStore: Boolean(currentEstimate.requiresReturnToStore),
+          returnToStoreActive: Boolean(currentEstimate.requiresReturnToStore),
+          returnReason: $('requiresReturnToStore').checked ? formValue('returnReason') : '',
+          collectionAmount: $('requiresReturnToStore').checked ? moneyToNumber(formValue('collectionAmount')) : 0,
+          collectionInstruction: $('requiresReturnToStore').checked
+            ? `Cobrar ${currency(moneyToNumber(formValue('collectionAmount')))} na maquininha e retornar a loja.`
+            : '',
+          returnIfCustomerAbsent: $('returnIfCustomerAbsent').checked,
+          absentCustomerInstruction: $('returnIfCustomerAbsent').checked
+            ? 'Se o cliente nao estiver em casa, retornar o pedido/pacote para a loja.'
+            : 'Se o cliente nao estiver em casa, seguir orientacao do estabelecimento para descarte/pacote.',
           status: 'Novo',
           createdAt: now,
           updatedAt: now,
         });
         $('deliveryForm').reset();
+        $('returnToStoreFields').classList.add('hidden');
         extraStopCount = 0;
         selectedDeliveryLocations = {};
         renderExtraStops();
